@@ -12,14 +12,23 @@
  * new deployments with updated env vars always pick up the current value.
  */
 
-// Indirection that breaks DefinePlugin's static analysis.
-// The typeof guard prevents ReferenceError in client bundles where
-// Next.js does not polyfill `process` (only static process.env.X replacements).
-const _env: Record<string, string | undefined> =
-  typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>) : {}
-
+/**
+ * Access env vars via globalThis['process'] using bracket notation.
+ *
+ * webpack's DefinePlugin replaces:
+ *   process.env.FOO          → "value" (string literal)
+ *   process.env['FOO']       → "value" (string literal — same)
+ *   process.env              → {} (empty object)
+ *
+ * It does NOT replace computed property accesses on opaque references.
+ * Accessing process via globalThis['process'] is opaque to DefinePlugin,
+ * so we get the real runtime process.env in Node.js serverless functions.
+ * In the browser, globalThis['process'] is undefined → returns undefined
+ * gracefully (server-only vars are never needed client-side).
+ */
 function runtimeEnv(key: string): string | undefined {
-  return _env[key]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (globalThis as any)['process']?.env?.[key]
 }
 
 export const env = {
