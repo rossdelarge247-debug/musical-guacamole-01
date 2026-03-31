@@ -12,8 +12,11 @@
  * new deployments with updated env vars always pick up the current value.
  */
 
-// Indirection that breaks DefinePlugin's static analysis
-const _env = process.env
+// Indirection that breaks DefinePlugin's static analysis.
+// The typeof guard prevents ReferenceError in client bundles where
+// Next.js does not polyfill `process` (only static process.env.X replacements).
+const _env: Record<string, string | undefined> =
+  typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>) : {}
 
 function runtimeEnv(key: string): string | undefined {
   return _env[key]
