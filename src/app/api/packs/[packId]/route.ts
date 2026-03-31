@@ -5,9 +5,9 @@ import { getDemoFlags } from '@/lib/demo/flags'
 // GET /api/packs/[packId]
 export async function GET(
   _request: Request,
-  { params }: { params: { packId: string } }
+  { params }: { params: Promise<{ packId: string }> }
 ) {
-  const { packId } = params
+  const { packId } = await params
   const flags = getDemoFlags()
 
   if (flags.auth || packId.startsWith('demo-')) {
@@ -33,12 +33,13 @@ export async function GET(
 // PATCH /api/packs/[packId] — update readiness scores etc.
 export async function PATCH(
   request: Request,
-  { params }: { params: { packId: string } }
+  { params }: { params: Promise<{ packId: string }> }
 ) {
+  const { packId } = await params
   const body = await request.json()
   const flags = getDemoFlags()
 
-  if (flags.auth) return NextResponse.json({ pack: { id: params.packId, ...body } })
+  if (flags.auth) return NextResponse.json({ pack: { id: packId, ...body } })
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -47,7 +48,7 @@ export async function PATCH(
   const { data: pack } = await supabase
     .from('job_packs')
     .update(body)
-    .eq('id', params.packId)
+    .eq('id', packId)
     .eq('user_id', user.id)
     .select()
     .single()

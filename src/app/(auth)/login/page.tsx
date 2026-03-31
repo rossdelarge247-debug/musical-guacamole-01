@@ -4,11 +4,13 @@ import { LoginForm } from '@/components/onboarding/login-form'
 
 export const metadata: Metadata = { title: 'Sign in' }
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: { redirect?: string }
+  searchParams: Promise<{ redirect?: string }>
 }) {
+  const { redirect } = await searchParams
+
   return (
     <div className="space-y-6">
       <div className="space-y-1">
@@ -20,7 +22,7 @@ export default function LoginPage({
         </p>
       </div>
 
-      <LoginForm redirectTo={searchParams.redirect ?? '/dashboard'} />
+      <LoginForm redirectTo={redirect ?? '/dashboard'} />
 
       <p className="text-center text-[14px] text-[var(--color-text-secondary)]">
         {"Don't have an account? "}

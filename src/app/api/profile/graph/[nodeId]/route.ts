@@ -5,13 +5,14 @@ import { getDemoFlags } from '@/lib/demo/flags'
 // PATCH /api/profile/graph/[nodeId] — update a single node
 export async function PATCH(
   request: Request,
-  { params }: { params: { nodeId: string } }
+  { params }: { params: Promise<{ nodeId: string }> }
 ) {
+  const { nodeId } = await params
   const body = await request.json()
   const flags = getDemoFlags()
 
   if (flags.auth) {
-    return NextResponse.json({ node: { id: params.nodeId, ...body } })
+    return NextResponse.json({ node: { id: nodeId, ...body } })
   }
 
   const supabase = await createClient()
@@ -21,7 +22,7 @@ export async function PATCH(
   const { data: node, error } = await supabase
     .from('candidate_graph_nodes')
     .update(body)
-    .eq('id', params.nodeId)
+    .eq('id', nodeId)
     .select()
     .single()
 
@@ -32,12 +33,13 @@ export async function PATCH(
 // DELETE /api/profile/graph/[nodeId] — delete a node
 export async function DELETE(
   _request: Request,
-  { params }: { params: { nodeId: string } }
+  { params }: { params: Promise<{ nodeId: string }> }
 ) {
+  const { nodeId } = await params
   const flags = getDemoFlags()
 
   if (flags.auth) {
-    return NextResponse.json({ deleted: params.nodeId })
+    return NextResponse.json({ deleted: nodeId })
   }
 
   const supabase = await createClient()
@@ -47,7 +49,7 @@ export async function DELETE(
   await supabase
     .from('candidate_graph_nodes')
     .delete()
-    .eq('id', params.nodeId)
+    .eq('id', nodeId)
 
-  return NextResponse.json({ deleted: params.nodeId })
+  return NextResponse.json({ deleted: nodeId })
 }

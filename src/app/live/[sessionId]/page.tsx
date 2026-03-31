@@ -4,12 +4,12 @@ import { Monitor, Smartphone, ArrowRight } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Live Workspace Setup' }
 
-export default function LiveSessionSetupPage({
+export default async function LiveSessionSetupPage({
   params,
 }: {
-  params: { sessionId: string }
+  params: Promise<{ sessionId: string }>
 }) {
-  const { sessionId } = params
+  const { sessionId } = await params
   const teleprompterUrl = `/live/${sessionId}/teleprompter`
   const controlUrl = `/live/${sessionId}/control`
 
