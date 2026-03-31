@@ -313,7 +313,7 @@ export async function POST(request: Request) {
                 profile_id: 'demo-profile',
               })),
               summary: { nodeCount, roleCount, achievementCount, skillCount: parsed.skills?.length ?? 0 },
-              demo: true,
+              demo: false,
             },
           }),
         )
