@@ -68,7 +68,10 @@ Return JSON with:
     try {
       parsed = JSON.parse(profileJson)
     } catch {
-      return NextResponse.json({ error: 'AI parsing failed — please try again' }, { status: 500 })
+      return NextResponse.json(
+        { error: `AI response was not valid JSON. Raw response: ${profileJson.slice(0, 300)}` },
+        { status: 500 },
+      )
     }
 
     if (flags.auth) {
@@ -129,6 +132,7 @@ Return JSON with:
     return NextResponse.json({ profile, nodes: nodes ?? [], demo: false })
   } catch (err) {
     console.error('CV parse error:', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const detail = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: `Internal server error: ${detail}` }, { status: 500 })
   }
 }

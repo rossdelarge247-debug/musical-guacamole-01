@@ -13,6 +13,7 @@ export function CVUpload() {
   const [pasteMode, setPasteMode] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [errorStatus, setErrorStatus] = useState<number | null>(null)
 
   const onDrop = useCallback(async (accepted: File[]) => {
     const file = accepted[0]
@@ -20,6 +21,7 @@ export function CVUpload() {
     setFileName(file.name)
     setState('uploading')
     setErrorMsg(null)
+    setErrorStatus(null)
 
     try {
       // Read file as text (PDF parsing happens server-side via AI)
@@ -33,8 +35,9 @@ export function CVUpload() {
       })
 
       if (!res.ok) {
-        const { error } = await res.json()
-        throw new Error(error ?? 'Parsing failed')
+        const body = await res.json().catch(() => ({}))
+        setErrorStatus(res.status)
+        throw new Error(body.error ?? `HTTP ${res.status}`)
       }
 
       setState('done')
@@ -60,6 +63,7 @@ export function CVUpload() {
     if (!pasteText.trim()) return
     setState('parsing')
     setErrorMsg(null)
+    setErrorStatus(null)
     try {
       const res = await fetch('/api/profile/parse', {
         method: 'POST',
@@ -67,8 +71,9 @@ export function CVUpload() {
         body: JSON.stringify({ text: pasteText, level: 'mid' }),
       })
       if (!res.ok) {
-        const { error } = await res.json()
-        throw new Error(error ?? 'Parsing failed')
+        const body = await res.json().catch(() => ({}))
+        setErrorStatus(res.status)
+        throw new Error(body.error ?? `HTTP ${res.status}`)
       }
       setState('done')
     } catch (err: unknown) {
@@ -102,6 +107,22 @@ export function CVUpload() {
 
   return (
     <div className="space-y-4">
+      {/* Persistent error banner — always visible, not hidden inside dropzone */}
+      {state === 'error' && errorMsg && (
+        <div className="rounded-lg border p-4" style={{ background: '#FEF2F2', borderColor: '#FECACA' }}>
+          <div className="flex items-start gap-3">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" style={{ color: '#DC2626' }} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold" style={{ color: '#DC2626' }}>
+                {errorStatus ? `Error ${errorStatus}` : 'Error'} — CV parsing failed
+              </p>
+              <p className="text-[12px] mt-1 break-words font-mono" style={{ color: '#991B1B' }}>
+                {errorMsg}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Mode toggle */}
       <div className="flex gap-2">
         <button
@@ -184,7 +205,9 @@ export function CVUpload() {
           {state === 'error' && (
             <div className="flex flex-col items-center gap-2">
               <AlertCircle size={28} className="text-[var(--color-signal-critical)]" />
-              <p className="text-[14px] text-[var(--color-signal-critical)]">{errorMsg}</p>
+              <p className="text-[13px] text-[var(--color-text-muted)]">
+                See error details above — fix and try again
+              </p>
             </div>
           )}
         </div>
