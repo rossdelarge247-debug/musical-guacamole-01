@@ -1,12 +1,8 @@
-'use client'
-
-import { useState } from 'react'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Topbar } from '@/components/layout/topbar'
-import { IS_DEMO_ENV } from '@/lib/demo/flags'
+import { getDemoFlags } from '@/lib/demo/flags'
+import { createClient } from '@/lib/supabase/server'
+import { AppShell } from './app-shell'
 import type { User } from '@/types'
 
-// Demo user for when auth is in demo mode
 const DEMO_USER: User = {
   id: 'demo-user',
   email: 'demo@interviewmonkey.co.uk',
@@ -23,36 +19,47 @@ const DEMO_USER: User = {
   updated_at: new Date().toISOString(),
 }
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false)
+async function getUser(): Promise<User> {
+  const flags = getDemoFlags()
+  if (flags.auth) return DEMO_USER
 
-  // In a real session, this would come from the server via createClient()
-  // For Sprint Zero, we use the demo user — auth integration completes in R1
-  const user = DEMO_USER
-  const sidebarWidth = collapsed ? 60 : 240
-  const topOffset = IS_DEMO_ENV ? 28 : 0
+  try {
+    const supabase = await createClient()
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) return DEMO_USER
 
-  return (
-    <div className="min-h-screen bg-[var(--color-background)]">
-      <Sidebar
-        tier={user.tier}
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-      />
+    // Try to get the full user record from our users table
+    const { data: dbUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authUser.id)
+      .single()
 
-      <Topbar user={user} sidebarWidth={sidebarWidth} />
+    if (dbUser) return dbUser as User
 
-      <main
-        className="transition-[padding-left] duration-200"
-        style={{
-          paddingLeft: sidebarWidth,
-          paddingTop: 56 + topOffset,
-        }}
-      >
-        <div className="max-w-[1400px] mx-auto p-6 lg:p-8">
-          {children}
-        </div>
-      </main>
-    </div>
-  )
+    // Fall back to constructing from auth user metadata
+    return {
+      id: authUser.id,
+      email: authUser.email ?? '',
+      full_name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? null,
+      avatar_url: authUser.user_metadata?.avatar_url ?? null,
+      tier: 'core',
+      addons: [],
+      preferred_answer_style: null,
+      preferred_interview_modes: [],
+      live_workspace_declaration_accepted: false,
+      live_workspace_declaration_accepted_at: null,
+      gdpr_consented_at: null,
+      created_at: authUser.created_at,
+      updated_at: authUser.updated_at ?? authUser.created_at,
+    }
+  } catch {
+    return DEMO_USER
+  }
+}
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await getUser()
+
+  return <AppShell user={user}>{children}</AppShell>
 }
