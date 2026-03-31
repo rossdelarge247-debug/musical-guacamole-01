@@ -60,6 +60,7 @@ export function CVUpload() {
   const [discoveries, setDiscoveries] = useState<Discovery[]>([])
   const [result, setResult] = useState<ParseResult | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<{ ai_demo: boolean; anthropic_key: string } | null>(null)
   const discoveryIdRef = useRef(0)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -79,6 +80,7 @@ export function CVUpload() {
     setDiscoveries([])
     setErrorMsg(null)
     setStatusMsg('Starting…')
+    setDebugInfo(null)
 
     try {
       const res = await fetch('/api/profile/parse', {
@@ -110,7 +112,9 @@ export function CVUpload() {
           if (!trimmed) continue
           try {
             const event = JSON.parse(trimmed)
-            if (event.type === 'status') {
+            if (event.type === 'debug') {
+              setDebugInfo({ ai_demo: event.ai_demo, anthropic_key: event.anthropic_key })
+            } else if (event.type === 'status') {
               setStatusMsg(event.message)
             } else if (event.type === 'found') {
               addDiscovery(event.category, event.value)
@@ -276,6 +280,22 @@ export function CVUpload() {
             <p className="text-[12px]" style={{ color: '#6B7280' }}>{statusMsg}</p>
           </div>
         </div>
+
+        {/* Debug: API key status */}
+        {debugInfo && (
+          <div
+            className="rounded-lg px-3 py-2 text-[11px] font-mono"
+            style={{
+              background: debugInfo.ai_demo ? '#FEF2F2' : '#F0FDF4',
+              color: debugInfo.ai_demo ? '#991B1B' : '#166534',
+              border: `1px solid ${debugInfo.ai_demo ? '#FECACA' : '#BBF7D0'}`,
+            }}
+          >
+            {debugInfo.ai_demo
+              ? `⚠ ANTHROPIC_API_KEY not detected on server — using demo fixture`
+              : `✓ Claude connected (${debugInfo.anthropic_key})`}
+          </div>
+        )}
 
         {/* Discoveries feed */}
         {discoveries.length > 0 && (
