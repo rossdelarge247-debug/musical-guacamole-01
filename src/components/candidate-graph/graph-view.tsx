@@ -53,9 +53,10 @@ interface RoleSectionProps {
   onVerify: (id: string) => void
   onEdit: (node: GraphNode) => void
   onDelete: (id: string) => void
+  onAddNode: (roleId: string, nodeData: Partial<GraphNode>) => void
 }
 
-function RoleSection({ role, children, onVerify, onEdit, onDelete }: RoleSectionProps) {
+function RoleSection({ role, children, onVerify, onEdit, onDelete, onAddNode }: RoleSectionProps) {
   const [childrenExpanded, setChildrenExpanded] = useState(true)
   const [showEnhancement, setShowEnhancement] = useState(false)
 
@@ -108,6 +109,7 @@ function RoleSection({ role, children, onVerify, onEdit, onDelete }: RoleSection
             role={role}
             children={children}
             onClose={() => setShowEnhancement(false)}
+            onAddNode={(nodeData) => onAddNode(role.id, nodeData)}
           />
         )}
       </div>
@@ -260,6 +262,49 @@ export function GraphView({ initialNodes, initialSkills }: GraphViewProps) {
     }
   }, [nodes])
 
+  const handleAddNode = useCallback(async (_roleId: string, nodeData: Partial<GraphNode>) => {
+    const newNode: GraphNode = {
+      id: `local-${Date.now()}`,
+      type: 'proof_point',
+      title: '',
+      description: '',
+      organisation: '',
+      date_from: '',
+      date_to: '',
+      metrics: [],
+      tags: [],
+      confidence: 0.8,
+      user_verified: false,
+      ...nodeData,
+    }
+    setNodes((prev) => [...prev, newNode])
+
+    // Update localStorage
+    try {
+      const stored = localStorage.getItem('im:graph')
+      if (stored) {
+        const graphData = JSON.parse(stored)
+        graphData.nodes = [...(graphData.nodes ?? []), newNode]
+        localStorage.setItem('im:graph', JSON.stringify(graphData))
+      }
+    } catch { /* silent */ }
+
+    // Try to persist to API (non-blocking)
+    try {
+      const res = await fetch('/api/profile/graph', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newNode),
+      })
+      if (res.ok) {
+        const { node } = await res.json()
+        if (node?.id) {
+          setNodes((prev) => prev.map((n) => n.id === newNode.id ? { ...n, id: node.id } : n))
+        }
+      }
+    } catch { /* silent */ }
+  }, [])
+
   const handleMineStories = useCallback(async () => {
     setMiningStories(true)
     try {
@@ -325,7 +370,7 @@ export function GraphView({ initialNodes, initialSkills }: GraphViewProps) {
 
       {/* Role groups */}
       {groups.map(({ role, children }) => (
-        <RoleSection key={role.id} role={role} children={children} onVerify={handleVerify} onEdit={setEditingNode} onDelete={handleDelete} />
+        <RoleSection key={role.id} role={role} children={children} onVerify={handleVerify} onEdit={setEditingNode} onDelete={handleDelete} onAddNode={handleAddNode} />
       ))}
 
       {/* Ungrouped */}

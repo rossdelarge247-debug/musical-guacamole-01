@@ -31,6 +31,37 @@ export async function GET() {
   return NextResponse.json({ nodes: nodes ?? [] })
 }
 
+// POST /api/profile/graph — create a new graph node
+export async function POST(request: Request) {
+  const flags = getDemoFlags()
+  const body = await request.json()
+
+  if (flags.auth) {
+    return NextResponse.json({ node: { id: `demo-${Date.now()}`, ...body } })
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const { data: profile } = await supabase
+    .from('candidate_profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .single()
+
+  if (!profile) return NextResponse.json({ error: 'No profile' }, { status: 404 })
+
+  const { data: node, error } = await supabase
+    .from('candidate_graph_nodes')
+    .insert({ ...body, profile_id: profile.id })
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ node })
+}
+
 // PATCH /api/profile/graph — bulk update verification status
 export async function PATCH(request: Request) {
   const { nodeIds, user_verified } = await request.json()
