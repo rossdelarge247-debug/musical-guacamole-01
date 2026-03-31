@@ -13,6 +13,35 @@
 
 import { getDemoFlags } from '@/lib/demo/flags'
 
+// Web Speech API types (not always available in all TS dom lib versions)
+interface ISpeechRecognitionResult {
+  readonly isFinal: boolean
+  readonly length: number
+  [index: number]: { readonly transcript: string; readonly confidence: number }
+}
+interface ISpeechRecognitionResultList {
+  readonly length: number
+  readonly resultIndex: number
+  readonly results: ISpeechRecognitionResultList
+  [index: number]: ISpeechRecognitionResult
+}
+interface ISpeechRecognitionEvent {
+  readonly resultIndex: number
+  readonly results: ISpeechRecognitionResultList & { [index: number]: ISpeechRecognitionResult; length: number }
+}
+interface ISpeechRecognitionErrorEvent {
+  readonly error: string
+}
+interface ISpeechRecognition {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: ISpeechRecognitionEvent) => void) | null
+  onerror: ((event: ISpeechRecognitionErrorEvent) => void) | null
+  start: () => void
+  stop: () => void
+}
+
 export interface TranscriptChunk {
   text: string
   is_final: boolean
@@ -39,7 +68,7 @@ function isLikelyQuestion(text: string): boolean {
 
 /** Browser Web Speech API fallback for demo / no-key mode */
 export class WebSpeechTranscriber {
-  private recognition: SpeechRecognition | null = null
+  private recognition: ISpeechRecognition | null = null
   private config: DeepgramConfig
   private running = false
 
@@ -49,8 +78,8 @@ export class WebSpeechTranscriber {
 
   start() {
     if (this.running) return
-    const SR =
-      window.SpeechRecognition || (window as unknown as { webkitSpeechRecognition: typeof SpeechRecognition }).webkitSpeechRecognition
+    const w = window as unknown as Record<string, new () => ISpeechRecognition>
+    const SR = w['SpeechRecognition'] || w['webkitSpeechRecognition']
     if (!SR) {
       this.config.onError(new Error('Speech recognition not supported in this browser.'))
       return

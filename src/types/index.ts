@@ -15,7 +15,7 @@ export interface User {
   tier: UserTier
   addons: UserAddon[]
   preferred_answer_style: AnswerStyle | null
-  preferred_interview_modes: InterviewMode[]
+  preferred_interview_modes: InterviewType[]
   live_workspace_declaration_accepted: boolean
   live_workspace_declaration_accepted_at: string | null
   gdpr_consented_at: string | null
