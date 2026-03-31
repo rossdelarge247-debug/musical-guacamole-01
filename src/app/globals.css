@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+/* =============================================================================
+   INTERVIEW MONKEY — DESIGN TOKENS
+   ============================================================================= */
+
+@theme {
+  /* Colours — base palette */
+  --color-background: #F3F4F6;
+  --color-surface: #FFFFFF;
+  --color-border: #E5E7EB;
+  --color-border-strong: #D1D5DB;
+
+  /* Primary blue (Indeed-anchored, trustworthy) */
+  --color-primary: #2557A7;
+  --color-primary-dark: #1D4491;
+  --color-primary-light: #DBEAFE;
+  --color-primary-foreground: #FFFFFF;
+
+  /* Text */
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #595959;
+  --color-text-muted: #767676;
+  --color-text-inverse: #FFFFFF;
+
+  /* Signal colours */
+  --color-signal-strong: #10B981;
+  --color-signal-warning: #F59E0B;
+  --color-signal-critical: #F43F5E;
+  --color-signal-strategic: #7C3AED;
+
+  /* Sidebar */
+  --color-sidebar-bg: #F9FAFB;
+  --color-sidebar-active-bg: #DBEAFE;
+  --color-sidebar-active-text: #2557A7;
+  --color-sidebar-text: #374151;
+  --color-sidebar-icon: #6B7280;
+
+  /* Teleprompter (dark performance surface) */
+  --color-teleprompter-bg: #0F172A;
+  --color-teleprompter-text: #F8FAFC;
+  --color-teleprompter-secondary: #94A3B8;
+  --color-teleprompter-accent: #2557A7;
+  --color-teleprompter-border: #1E293B;
+
+  /* Typography */
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', 'Fira Code', monospace;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.10);
+
+  /* Transitions */
+  --transition-fast: 150ms ease-out;
+  --transition-base: 200ms ease-out;
+}
+
+/* =============================================================================
+   BASE RESET & GLOBAL STYLES
+   ============================================================================= */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+/* =============================================================================
+   TELEPROMPTER SURFACE — global overrides for dechrome view
+   ============================================================================= */
+
+.teleprompter-surface {
+  background-color: var(--color-teleprompter-bg);
+  color: var(--color-teleprompter-text);
+  font-family: var(--font-sans);
+  cursor: none;
+  user-select: none;
+}
+
+.teleprompter-surface * {
+  cursor: none !important;
+}
+
+/* =============================================================================
+   SCROLLBAR — minimal, composed
+   ============================================================================= */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-full);
+}
+
+/* =============================================================================
+   FOCUS — accessible, on-brand
+   ============================================================================= */
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* =============================================================================
+   STREAMING TEXT ANIMATION
+   ============================================================================= */
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-cursor::after {
+  content: '▋';
+  display: inline-block;
+  margin-left: 1px;
+  animation: cursor-blink 0.8s ease infinite;
+  color: var(--color-primary);
+  font-size: 0.75em;
+}
+
+/* =============================================================================
+   DEMO MODE BANNER
+   ============================================================================= */
+
+.demo-banner {
+  background: linear-gradient(90deg, #FEF9C3 0%, #FEF08A 100%);
+  border-bottom: 1px solid #FDE047;
+  color: #713F12;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  padding: 4px 16px;
+  letter-spacing: 0.01em;
+}
