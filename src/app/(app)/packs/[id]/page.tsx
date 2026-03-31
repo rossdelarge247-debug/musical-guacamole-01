@@ -1,0 +1,571 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { useParams } from 'next/navigation'
+import { Copy, Check, ChevronRight, ExternalLink, Zap } from 'lucide-react'
+import { Breadcrumbs } from '@/components/layout/breadcrumbs'
+import { Badge } from '@/components/ui/badge'
+import { PageLoading } from '@/components/ui/loading-spinner'
+import { cn } from '@/lib/utils'
+
+// ─── Demo data ────────────────────────────────────────────────────────────────
+
+const DEMO_PACK = {
+  id: 'demo-pack-1',
+  title: 'Head of Product — FinovaTech',
+  company: 'FinovaTech',
+  role_level: 'senior',
+  interview_type: 'mixed',
+  opening_pitch:
+    'I am a senior product leader with six years building B2B SaaS products at scale. My particular strength is translating complex technical constraints into commercially valuable user outcomes — I have done this most recently by leading an onboarding redesign that delivered 40% faster time-to-value and an 18% uplift in 30-day retention. I am drawn to this role because FinovaTech is solving a problem I genuinely believe matters, and the scope of the challenge matches where I want to grow.',
+  target_signals: [
+    'ownership',
+    'leadership',
+    'commercial_awareness',
+    'judgment',
+    'strategic_thinking',
+  ],
+  vocabulary: [
+    'product-led growth',
+    'outcome-based roadmap',
+    'north star metric',
+    'discovery cadence',
+    'activation rate',
+  ],
+  likely_questions: [
+    {
+      id: 'q1',
+      text: 'Tell me about a time you had to align multiple stakeholders on a difficult product decision.',
+      type: 'stakeholder',
+      priority: 'high',
+      why_likely:
+        'FinovaTech operates across 3 business units requiring heavy internal alignment.',
+    },
+    {
+      id: 'q2',
+      text: 'Describe a product you launched that did not perform as expected. What did you do?',
+      type: 'failure',
+      priority: 'high',
+      why_likely: 'Senior roles test resilience and self-awareness under commercial pressure.',
+    },
+    {
+      id: 'q3',
+      text: 'How do you decide what not to build?',
+      type: 'strategy',
+      priority: 'high',
+      why_likely: 'Prioritisation judgment is a key signal at senior level.',
+    },
+    {
+      id: 'q4',
+      text: 'What is your approach to building a product roadmap with limited engineering resource?',
+      type: 'strategy',
+      priority: 'medium',
+      why_likely: 'FinovaTech is Series A with constrained headcount.',
+    },
+    {
+      id: 'q5',
+      text: 'Tell me about a time you influenced a decision without formal authority.',
+      type: 'leadership',
+      priority: 'medium',
+      why_likely: 'Matrix structure means influence over authority is critical.',
+    },
+  ],
+  inferred_priorities: [
+    'Commercial growth',
+    'Cross-functional leadership',
+    'Data-led product decisions',
+    'Stakeholder management',
+  ],
+  stories: [
+    {
+      id: 's1',
+      title: 'Onboarding Redesign',
+      summary:
+        'Led end-to-end redesign of the onboarding flow, cutting time-to-value by 40% and improving 30-day retention by 18%.',
+      signals: ['ownership', 'commercial_awareness', 'evidence'],
+      confidence: 4.2,
+    },
+    {
+      id: 's2',
+      title: 'Cross-BU Roadmap Alignment',
+      summary:
+        'Facilitated a six-week alignment process across three business units to agree on a single unified roadmap.',
+      signals: ['leadership', 'stakeholder_management', 'strategic_thinking'],
+      confidence: 3.8,
+    },
+    {
+      id: 's3',
+      title: 'Failed Feature Launch',
+      summary:
+        'Launched a collaboration feature that saw <5% adoption. Diagnosed root cause, pivoted the approach, and recovered usage within one quarter.',
+      signals: ['ownership', 'judgment', 'resilience'],
+      confidence: 3.5,
+    },
+  ],
+  pressure_points: [
+    {
+      id: 'pp1',
+      type: 'gap',
+      title: 'Limited enterprise sales experience',
+      severity: 'medium',
+      interviewer_concern:
+        'Candidate may not have navigated long enterprise procurement cycles or executive-level buyer dynamics.',
+    },
+    {
+      id: 'pp2',
+      type: 'ambiguity',
+      title: 'Metrics ownership unclear',
+      severity: 'high',
+      interviewer_concern:
+        'Strong candidate but unclear whether they owned P&L accountability or merely influenced it.',
+    },
+    {
+      id: 'pp3',
+      type: 'challenge',
+      title: 'Team size never exceeded 4 reports',
+      severity: 'low',
+      interviewer_concern:
+        'Role may require managing 8+ direct reports across multiple geographies.',
+    },
+  ],
+  readiness: {
+    intro: 0,
+    leadership: 0,
+    failure: 0,
+    conflict: 0,
+    ambiguity: 0,
+    evidence: 0,
+    exec_presence: 0,
+    motivation: 0,
+  },
+}
+
+type Pack = typeof DEMO_PACK
+type TabId = 'questions' | 'stories' | 'pressure'
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatSignal(s: string) {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function priorityVariant(p: string): 'primary' | 'default' | 'outline' {
+  if (p === 'high') return 'primary'
+  if (p === 'medium') return 'default'
+  return 'outline'
+}
+
+function severityVariant(s: string): 'critical' | 'warning' | 'default' {
+  if (s === 'high') return 'critical'
+  if (s === 'medium') return 'warning'
+  return 'default'
+}
+
+function questionTypeVariant(t: string): 'strategic' | 'warning' | 'critical' | 'default' {
+  if (t === 'strategy') return 'strategic'
+  if (t === 'leadership') return 'warning'
+  if (t === 'failure') return 'critical'
+  return 'default'
+}
+
+function confidenceDotClass(score: number) {
+  if (score >= 4) return 'bg-[var(--color-signal-strong)]'
+  if (score >= 3) return 'bg-[var(--color-signal-warning)]'
+  return 'bg-[var(--color-signal-critical)]'
+}
+
+const READINESS_LABELS: Record<keyof typeof DEMO_PACK.readiness, string> = {
+  intro: 'Introduction',
+  leadership: 'Leadership',
+  failure: 'Handling failure',
+  conflict: 'Conflict',
+  ambiguity: 'Ambiguity',
+  evidence: 'Evidence / data',
+  exec_presence: 'Exec presence',
+  motivation: 'Motivation',
+}
+
+// ─── Left panel sections ───────────────────────────────────────────────────────
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="shrink-0 flex items-center gap-1 text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors duration-[var(--transition-fast)]"
+      aria-label="Copy to clipboard"
+    >
+      {copied ? (
+        <>
+          <Check size={13} className="text-[var(--color-signal-strong)]" />
+          <span className="text-[var(--color-signal-strong)]">Copied</span>
+        </>
+      ) : (
+        <>
+          <Copy size={13} />
+          Copy
+        </>
+      )}
+    </button>
+  )
+}
+
+function ReadinessBar({ label, score }: { label: string; score: number }) {
+  const tested = score > 0
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] text-[var(--color-text-secondary)]">{label}</span>
+        {tested ? (
+          <span className="text-[12px] font-semibold text-[var(--color-text-primary)]">
+            {score}/5
+          </span>
+        ) : (
+          <span className="text-[11px] text-[var(--color-text-muted)] italic">Not tested</span>
+        )}
+      </div>
+      <div className="h-1.5 rounded-full bg-[var(--color-border)] overflow-hidden">
+        {tested && (
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${(score / 5) * 100}%`,
+              background:
+                score >= 4
+                  ? 'var(--color-signal-strong)'
+                  : score >= 2.5
+                  ? 'var(--color-signal-warning)'
+                  : 'var(--color-signal-critical)',
+            }}
+          />
+        )}
+        {!tested && (
+          <div
+            className="h-full w-0 bg-[var(--color-border-strong)]"
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Tab content components ───────────────────────────────────────────────────
+
+function QuestionsTab({ pack }: { pack: Pack }) {
+  return (
+    <div className="space-y-3">
+      {pack.likely_questions.map((q) => (
+        <div
+          key={q.id}
+          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-4 hover:border-[var(--color-primary)]/40 hover:shadow-sm transition-all duration-[var(--transition-fast)]"
+        >
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <p className="text-[14px] font-semibold text-[var(--color-text-primary)] leading-snug">
+              {q.text}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 mb-3">
+            <Badge variant={questionTypeVariant(q.type)}>
+              {q.type}
+            </Badge>
+            <Badge variant={priorityVariant(q.priority)}>
+              {q.priority} priority
+            </Badge>
+          </div>
+
+          {q.why_likely && (
+            <p className="text-[12px] text-[var(--color-text-muted)] italic mb-3 leading-relaxed">
+              {q.why_likely}
+            </p>
+          )}
+
+          <button className="inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--color-primary)] hover:underline">
+            Open in Answer Lab
+            <ChevronRight size={13} />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function StoriesTab({ pack }: { pack: Pack }) {
+  return (
+    <div className="grid sm:grid-cols-2 gap-3">
+      {pack.stories.map((s) => (
+        <div
+          key={s.id}
+          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-4 flex flex-col gap-3 hover:border-[var(--color-primary)]/40 hover:shadow-sm transition-all duration-[var(--transition-fast)]"
+        >
+          {/* Header */}
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-[14px] font-semibold text-[var(--color-text-primary)]">
+              {s.title}
+            </h3>
+            <span
+              title={`Confidence: ${s.confidence.toFixed(1)}/5`}
+              className={cn(
+                'shrink-0 w-2.5 h-2.5 rounded-full mt-1',
+                confidenceDotClass(s.confidence),
+              )}
+            />
+          </div>
+
+          {/* Summary */}
+          <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed line-clamp-2">
+            {s.summary}
+          </p>
+
+          {/* Signal badges */}
+          <div className="flex flex-wrap gap-1.5 mt-auto">
+            {s.signals.slice(0, 3).map((sig) => (
+              <Badge key={sig} variant="primary">
+                {formatSignal(sig)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PressureTab({ pack }: { pack: Pack }) {
+  return (
+    <div className="space-y-3">
+      {pack.pressure_points.map((pp) => (
+        <div
+          key={pp.id}
+          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-4 hover:border-[var(--color-signal-critical)]/30 hover:shadow-sm transition-all duration-[var(--transition-fast)]"
+        >
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h3 className="text-[14px] font-semibold text-[var(--color-text-primary)]">
+              {pp.title}
+            </h3>
+            <div className="flex items-center gap-2 shrink-0">
+              <Badge variant="default">{pp.type}</Badge>
+              <Badge variant={severityVariant(pp.severity)}>{pp.severity}</Badge>
+            </div>
+          </div>
+
+          <p className="text-[13px] italic text-[var(--color-text-muted)] leading-relaxed mb-3">
+            "{pp.interviewer_concern}"
+          </p>
+
+          <button className="inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--color-primary)] hover:underline">
+            <Zap size={12} />
+            Practice drills
+            <ChevronRight size={13} />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export default function PackDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const [pack, setPack] = useState<Pack | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<TabId>('questions')
+
+  const fetchPack = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/packs/${id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setPack(data)
+      } else {
+        setPack(DEMO_PACK)
+      }
+    } catch {
+      setPack(DEMO_PACK)
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    fetchPack()
+  }, [fetchPack])
+
+  if (loading) return <PageLoading label="Loading pack…" />
+  if (!pack) return null
+
+  const tabs: { id: TabId; label: string; count: number }[] = [
+    { id: 'questions', label: 'Questions', count: pack.likely_questions.length },
+    { id: 'stories', label: 'Stories', count: pack.stories.length },
+    { id: 'pressure', label: 'Pressure Points', count: pack.pressure_points.length },
+  ]
+
+  return (
+    <div className="space-y-5">
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        crumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Interview Packs', href: '/packs' },
+          { label: pack.title },
+        ]}
+      />
+
+      {/* Two-column layout */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* ── LEFT PANEL ── */}
+        <aside className="w-full lg:w-[380px] lg:shrink-0 space-y-4">
+          {/* Pack header card */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 space-y-4">
+            {/* Title + company */}
+            <div>
+              <h1 className="text-[18px] font-semibold text-[var(--color-text-primary)] leading-snug">
+                {pack.title}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {pack.company && (
+                  <Badge variant="primary">{pack.company}</Badge>
+                )}
+                <Badge variant="default">{pack.role_level}</Badge>
+                <Badge variant="default">{pack.interview_type}</Badge>
+              </div>
+            </div>
+
+            {/* Opening pitch */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+                  Opening pitch
+                </p>
+                <CopyButton text={pack.opening_pitch} />
+              </div>
+              <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed">
+                {pack.opening_pitch}
+              </p>
+            </div>
+          </div>
+
+          {/* Signals + vocabulary card */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 space-y-4">
+            {/* Target signals */}
+            <div>
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
+                Likely signals
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {pack.target_signals.map((s) => (
+                  <Badge key={s} variant="strong">
+                    {formatSignal(s)}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* Key vocabulary */}
+            <div>
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
+                Key vocabulary
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {pack.vocabulary.map((word) => (
+                  <span
+                    key={word}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full text-[12px] bg-[var(--color-background)] text-[var(--color-text-secondary)] border border-[var(--color-border)]"
+                  >
+                    {word}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Readiness card */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5">
+            <p className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-4">
+              Readiness
+            </p>
+            <div className="space-y-3">
+              {(Object.keys(pack.readiness) as Array<keyof typeof pack.readiness>).map((key) => (
+                <ReadinessBar
+                  key={key}
+                  label={READINESS_LABELS[key]}
+                  score={pack.readiness[key]}
+                />
+              ))}
+            </div>
+            <p className="mt-4 text-[12px] text-[var(--color-text-muted)] italic">
+              Complete mock interviews to populate readiness scores.
+            </p>
+          </div>
+
+          {/* Inferred priorities */}
+          {pack.inferred_priorities.length > 0 && (
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
+                Inferred priorities
+              </p>
+              <ul className="space-y-2">
+                {pack.inferred_priorities.map((priority) => (
+                  <li
+                    key={priority}
+                    className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]"
+                  >
+                    <span className="w-1 h-1 rounded-full bg-[var(--color-primary)] shrink-0" />
+                    {priority}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </aside>
+
+        {/* ── RIGHT PANEL ── */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Tab bar */}
+          <div className="flex items-center gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[var(--radius-md)] text-[13px] font-semibold transition-all duration-[var(--transition-fast)]',
+                  activeTab === tab.id
+                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-background)]',
+                )}
+              >
+                {tab.label}
+                <span
+                  className={cn(
+                    'inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold',
+                    activeTab === tab.id
+                      ? 'bg-white/25 text-white'
+                      : 'bg-[var(--color-border)] text-[var(--color-text-muted)]',
+                  )}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div>
+            {activeTab === 'questions' && <QuestionsTab pack={pack} />}
+            {activeTab === 'stories' && <StoriesTab pack={pack} />}
+            {activeTab === 'pressure' && <PressureTab pack={pack} />}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

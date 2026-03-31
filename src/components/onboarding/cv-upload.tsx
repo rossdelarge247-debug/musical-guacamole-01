@@ -22,14 +22,25 @@ export function CVUpload() {
     setErrorMsg(null)
 
     try {
-      // Simulate upload + parsing for Sprint Zero
-      await new Promise((r) => setTimeout(r, 800))
+      // Read file as text (PDF parsing happens server-side via AI)
+      const text = await file.text()
       setState('parsing')
-      await new Promise((r) => setTimeout(r, 1600))
+
+      const res = await fetch('/api/profile/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, level: 'mid' }),
+      })
+
+      if (!res.ok) {
+        const { error } = await res.json()
+        throw new Error(error ?? 'Parsing failed')
+      }
+
       setState('done')
-    } catch {
+    } catch (err: unknown) {
       setState('error')
-      setErrorMsg('Upload failed. Please try again.')
+      setErrorMsg(err instanceof Error ? err.message : 'Upload failed. Please try again.')
     }
   }, [])
 
@@ -50,11 +61,19 @@ export function CVUpload() {
     setState('parsing')
     setErrorMsg(null)
     try {
-      await new Promise((r) => setTimeout(r, 1600))
+      const res = await fetch('/api/profile/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: pasteText, level: 'mid' }),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        throw new Error(error ?? 'Parsing failed')
+      }
       setState('done')
-    } catch {
+    } catch (err: unknown) {
       setState('error')
-      setErrorMsg('Parsing failed. Please try again.')
+      setErrorMsg(err instanceof Error ? err.message : 'Parsing failed. Please try again.')
     }
   }
 
