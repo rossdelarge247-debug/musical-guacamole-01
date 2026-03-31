@@ -358,12 +358,24 @@ export async function POST(request: Request) {
         user_verified: false,
       }))
 
-      const { data: nodes } = await supabase!
+      const { data: nodes, error: nodesError } = await supabase!
         .from('candidate_graph_nodes')
         .insert(nodesToInsert)
         .select()
 
-      const savedNodes = nodes ?? []
+      if (nodesError) {
+        console.error('Nodes insert error:', nodesError.message)
+      }
+
+      // If Supabase insert failed, fall back to the parsed nodes so
+      // localStorage still gets populated with real Claude output.
+      const savedNodes = nodes ?? nodesToInsert.map((n, i) => ({
+        ...n,
+        id: `local-node-${profile.id}-${i}`,
+        profile_id: profile.id,
+        created_at: new Date().toISOString(),
+      }))
+
       await writer.write(
         encodeEvent({
           type: 'complete',
