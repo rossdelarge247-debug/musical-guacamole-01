@@ -4,13 +4,21 @@ import { Search, HelpCircle, Bell } from 'lucide-react'
 import { UserMenu } from './user-menu'
 import { IS_DEMO_ENV } from '@/lib/demo/flags'
 import type { User } from '@/types'
+import type { ThemeId } from '@/app/(app)/app-shell'
+
+const THEMES: { id: ThemeId; label: string }[] = [
+  { id: '1', label: 'Classic' },
+  { id: '2', label: 'Bold' },
+]
 
 interface TopbarProps {
   user: User
   sidebarWidth: number
+  theme: ThemeId
+  onThemeChange: (t: ThemeId) => void
 }
 
-export function Topbar({ user, sidebarWidth }: TopbarProps) {
+export function Topbar({ user, sidebarWidth, theme, onThemeChange }: TopbarProps) {
   return (
     <>
       {IS_DEMO_ENV && (
@@ -23,10 +31,12 @@ export function Topbar({ user, sidebarWidth }: TopbarProps) {
       )}
 
       <header
-        className="fixed top-0 right-0 z-20 h-14 bg-white border-b border-[var(--color-border)] flex items-center px-4 gap-3 transition-[left] duration-200"
+        className="fixed top-0 right-0 z-20 h-14 border-b flex items-center px-4 gap-3 transition-[left] duration-200"
         style={{
           left: sidebarWidth,
           top: IS_DEMO_ENV ? 28 : 0,
+          background: 'var(--color-topbar-bg)',
+          borderColor: 'var(--color-topbar-border)',
         }}
       >
         {/* Search */}
@@ -47,14 +57,36 @@ export function Topbar({ user, sidebarWidth }: TopbarProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="flex items-center gap-2 ml-auto">
+          {/* Theme toggle */}
+          <div
+            className="flex items-center rounded-[var(--radius-md)] border overflow-hidden"
+            style={{ borderColor: 'var(--color-border)' }}
+          >
+            {THEMES.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => onThemeChange(id)}
+                className="px-2.5 py-1 text-[11px] font-semibold tracking-wide transition-colors"
+                style={{
+                  background: theme === id ? 'var(--color-primary)' : 'transparent',
+                  color: theme === id ? '#fff' : 'var(--color-text-muted)',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="w-px h-5 bg-[var(--color-border)]" />
+
           <button className="p-2 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
             <Bell size={17} />
           </button>
           <button className="p-2 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
             <HelpCircle size={17} />
           </button>
-          <div className="w-px h-5 bg-[var(--color-border)] mx-1" />
+          <div className="w-px h-5 bg-[var(--color-border)]" />
           <UserMenu user={user} />
         </div>
       </header>

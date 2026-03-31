@@ -61,6 +61,69 @@
   /* Transitions */
   --transition-fast: 150ms ease-out;
   --transition-base: 200ms ease-out;
+
+  /* Sidebar hover (theme-specific) */
+  --color-sidebar-hover: var(--color-border);
+  --color-sidebar-label: var(--color-text-muted);
+
+  /* Topbar background (theme-specific) */
+  --color-topbar-bg: #FFFFFF;
+  --color-topbar-border: var(--color-border);
+}
+
+/* =============================================================================
+   THEME 2 — BOLD / EDITORIAL
+   Deep electric purple accent · ink-black sidebar · tight radii · crisp white
+   ============================================================================= */
+
+[data-theme="2"] {
+  /* Backgrounds — crisp white content area */
+  --color-background: #FAFAFA;
+  --color-surface: #FFFFFF;
+  --color-border: #E4E4E7;
+  --color-border-strong: #D4D4D8;
+
+  /* Primary — deep electric purple */
+  --color-primary: #4F00D9;
+  --color-primary-dark: #3B00A8;
+  --color-primary-light: #EDE9FD;
+  --color-primary-foreground: #FFFFFF;
+
+  /* Text — punchy near-black */
+  --color-text-primary: #09090B;
+  --color-text-secondary: #3F3F46;
+  --color-text-muted: #71717A;
+  --color-text-inverse: #FFFFFF;
+
+  /* Signal — same intent, slightly punchier */
+  --color-signal-strong: #059669;
+  --color-signal-warning: #D97706;
+  --color-signal-critical: #DC2626;
+  --color-signal-strategic: #7C3AED;
+
+  /* Sidebar — dark / inverted */
+  --color-sidebar-bg: #09090B;
+  --color-sidebar-active-bg: #4F00D9;
+  --color-sidebar-active-text: #FFFFFF;
+  --color-sidebar-text: #D4D4D8;
+  --color-sidebar-icon: #A1A1AA;
+  --color-sidebar-hover: #18181B;
+  --color-sidebar-label: #52525B;
+
+  /* Topbar */
+  --color-topbar-bg: #FFFFFF;
+  --color-topbar-border: #E4E4E7;
+
+  /* Radii — tighter, more editorial */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows — crisper */
+  --shadow-card: 0 1px 4px 0 rgb(0 0 0 / 0.10), 0 0 0 1px rgb(0 0 0 / 0.04);
+  --shadow-card-hover: 0 6px 20px 0 rgb(0 0 0 / 0.14);
 }
 
 /* =============================================================================

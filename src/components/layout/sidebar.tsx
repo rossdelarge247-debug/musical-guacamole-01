@@ -94,7 +94,7 @@ export function Sidebar({ tier, collapsed = false, onCollapse }: SidebarProps) {
         {NAV.map(({ group, items }) => (
           <div key={group}>
             {!collapsed && (
-              <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-sidebar-label)' }}>
                 {group}
               </p>
             )}
@@ -116,7 +116,7 @@ export function Sidebar({ tier, collapsed = false, onCollapse }: SidebarProps) {
                         active
                           ? 'bg-[var(--color-sidebar-active-bg)] text-[var(--color-sidebar-active-text)]'
                           : accessible
-                            ? 'text-[var(--color-sidebar-text)] hover:bg-[var(--color-border)] hover:text-[var(--color-text-primary)]'
+                            ? 'text-[var(--color-sidebar-text)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-sidebar-text)]'
                             : 'text-[var(--color-text-muted)] opacity-60 cursor-not-allowed',
                         collapsed && 'justify-center px-2',
                       )}
@@ -152,7 +152,7 @@ export function Sidebar({ tier, collapsed = false, onCollapse }: SidebarProps) {
         <Link
           href="/settings"
           className={cn(
-            'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] text-[14px] font-medium text-[var(--color-sidebar-text)] hover:bg-[var(--color-border)] transition-colors',
+            'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] text-[14px] font-medium text-[var(--color-sidebar-text)] hover:bg-[var(--color-sidebar-hover)] transition-colors',
             collapsed && 'justify-center px-2',
           )}
           title={collapsed ? 'Settings' : undefined}
@@ -165,7 +165,7 @@ export function Sidebar({ tier, collapsed = false, onCollapse }: SidebarProps) {
           <button
             onClick={() => onCollapse(!collapsed)}
             className={cn(
-              'w-full flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] text-[14px] text-[var(--color-text-muted)] hover:bg-[var(--color-border)] transition-colors',
+              'w-full flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] text-[14px] text-[var(--color-sidebar-text)] hover:bg-[var(--color-sidebar-hover)] transition-colors',
               collapsed && 'justify-center px-2',
             )}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
