@@ -194,52 +194,80 @@ export async function POST(request: Request) {
         return
       }
 
-      // ── Real Claude call ──
-      await writer.write(
-        encodeEvent({ type: 'status', message: 'Claude is reading your CV…' }),
-      )
-
+      // ── Real Claude call (with retry on overload) ──
       const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY() })
       let fullResponse = ''
+      const MAX_ATTEMPTS = 3
+      const RETRY_DELAYS = [8000, 16000] // ms between attempts
 
-      try {
-        const stream = client.messages.stream({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 8192,
-          system: PARSE_SYSTEM,
-          messages: [
-            {
-              role: 'user',
-              content: `Extract a complete structured profile from this CV.\n\nCV TEXT:\n${cvText}`,
-            },
-          ],
-        })
+      let lastAttemptError: unknown = null
+      let succeeded = false
 
-        let lastProgressAt = 0
-        const emittedDiscoveries = new Set<string>()
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        if (attempt > 0) {
+          const delay = RETRY_DELAYS[attempt - 1]
+          await writer.write(
+            encodeEvent({ type: 'status', message: `Claude is busy — retrying in ${delay / 1000}s… (attempt ${attempt + 1}/${MAX_ATTEMPTS})` }),
+          )
+          await new Promise((r) => setTimeout(r, delay))
+        }
 
-        for await (const event of stream) {
-          if (
-            event.type === 'content_block_delta' &&
-            event.delta.type === 'text_delta'
-          ) {
-            fullResponse += event.delta.text
+        await writer.write(
+          encodeEvent({ type: 'status', message: attempt === 0 ? 'Claude is reading your CV…' : 'Retrying with Claude…' }),
+        )
 
-            // Throttle: scan for NEW discoveries every 800ms
-            const now = Date.now()
-            if (now - lastProgressAt > 800) {
-              lastProgressAt = now
-              for (const discovery of extractNewDiscoveries(fullResponse, emittedDiscoveries)) {
-                await writer.write(encodeEvent({ type: 'found', ...discovery }))
+        fullResponse = ''
+        try {
+          const stream = client.messages.stream({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 8192,
+            system: PARSE_SYSTEM,
+            messages: [
+              {
+                role: 'user',
+                content: `Extract a complete structured profile from this CV.\n\nCV TEXT:\n${cvText}`,
+              },
+            ],
+          })
+
+          let lastProgressAt = 0
+          const emittedDiscoveries = new Set<string>()
+
+          for await (const event of stream) {
+            if (
+              event.type === 'content_block_delta' &&
+              event.delta.type === 'text_delta'
+            ) {
+              fullResponse += event.delta.text
+
+              // Throttle: scan for NEW discoveries every 800ms
+              const now = Date.now()
+              if (now - lastProgressAt > 800) {
+                lastProgressAt = now
+                for (const discovery of extractNewDiscoveries(fullResponse, emittedDiscoveries)) {
+                  await writer.write(encodeEvent({ type: 'found', ...discovery }))
+                }
               }
             }
           }
+
+          succeeded = true
+          break
+        } catch (aiErr) {
+          lastAttemptError = aiErr
+          const msg = aiErr instanceof Error ? aiErr.message : String(aiErr)
+          // Only retry on overload errors
+          const isOverload = msg.includes('overloaded') || msg.includes('529') || msg.includes('overload_error')
+          if (!isOverload || attempt === MAX_ATTEMPTS - 1) break
         }
-      } catch (aiErr) {
+      }
+
+      if (!succeeded) {
+        const msg = lastAttemptError instanceof Error ? lastAttemptError.message : String(lastAttemptError)
         await writer.write(
           encodeEvent({
             type: 'error',
-            message: `Claude API error: ${aiErr instanceof Error ? aiErr.message : String(aiErr)}`,
+            message: `Claude API error after ${MAX_ATTEMPTS} attempts: ${msg}`,
           }),
         )
         await writer.close()
