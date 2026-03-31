@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Sparkles, Loader2, ChevronDown, ChevronUp, CheckCheck } from 'lucide-react'
+import { ArrowRight, Sparkles, ChevronDown, ChevronUp, CheckCheck } from 'lucide-react'
 import { GraphNodeCard, type GraphNode, type NodeType } from '@/components/candidate-graph/graph-node-card'
 import { NodeEditorModal } from '@/components/candidate-graph/node-editor-modal'
+import { EnhancementPanel } from '@/components/candidate-graph/enhancement-panel'
 
 // ---------------------------------------------------------------------------
 // Role grouping
@@ -43,40 +44,6 @@ function groupNodesByRole(nodes: GraphNode[]): {
 }
 
 // ---------------------------------------------------------------------------
-// Enhancement panel
-// ---------------------------------------------------------------------------
-
-function EnhancementPanel({ text, loading }: { text: string; loading: boolean }) {
-  const lines = text.split('\n')
-  return (
-    <div
-      className="mt-4 rounded-[var(--radius-md)] border p-4"
-      style={{ background: 'var(--color-background)', borderColor: 'var(--color-border)' }}
-    >
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles size={14} style={{ color: 'var(--color-primary)' }} />
-        <span className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>
-          Helper Monkey&apos;s suggestions
-        </span>
-        {loading && <Loader2 size={12} className="animate-spin ml-auto" style={{ color: 'var(--color-text-muted)' }} />}
-      </div>
-      <div className="space-y-0.5">
-        {lines.map((line, i) => {
-          if (line.startsWith('## ')) {
-            return <p key={i} className="text-[13px] font-semibold pt-3 pb-1" style={{ color: 'var(--color-text-primary)' }}>{line.slice(3)}</p>
-          }
-          if (line.startsWith('- ') || line.startsWith('* ')) {
-            return <p key={i} className="text-[13px] pl-3 leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>· {line.slice(2).replace(/\*\*([^*]+)\*\*/g, '$1')}</p>
-          }
-          if (!line.trim()) return <div key={i} className="h-1" />
-          return <p key={i} className="text-[13px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>{line.replace(/\*\*([^*]+)\*\*/g, '$1')}</p>
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Role section
 // ---------------------------------------------------------------------------
 
@@ -90,39 +57,9 @@ interface RoleSectionProps {
 
 function RoleSection({ role, children, onVerify, onEdit, onDelete }: RoleSectionProps) {
   const [childrenExpanded, setChildrenExpanded] = useState(true)
-  const [enhancing, setEnhancing] = useState(false)
-  const [enhancementText, setEnhancementText] = useState('')
   const [showEnhancement, setShowEnhancement] = useState(false)
 
   const dateRange = [role.date_from, role.date_to].filter(Boolean).join(' – ')
-
-  async function handleEnhance() {
-    setShowEnhancement(true)
-    setEnhancing(true)
-    setEnhancementText('')
-    try {
-      const res = await fetch('/api/ai/role/enhance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, children }),
-      })
-      if (!res.ok || !res.body) {
-        setEnhancementText(await res.text().catch(() => 'Helper Monkey is lost… try again in a moment.'))
-        return
-      }
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        setEnhancementText((prev) => prev + decoder.decode(value, { stream: true }))
-      }
-    } catch {
-      setEnhancementText('Helper Monkey is lost… try again in a moment.')
-    } finally {
-      setEnhancing(false)
-    }
-  }
 
   return (
     <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
@@ -150,12 +87,12 @@ function RoleSection({ role, children, onVerify, onEdit, onDelete }: RoleSection
 
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={handleEnhance}
-              disabled={enhancing}
-              className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-[var(--radius-md)] border border-[var(--color-primary)]/30 text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors disabled:opacity-60"
+              onClick={() => setShowEnhancement((v) => !v)}
+              className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-[var(--radius-md)] border border-[var(--color-primary)]/30 text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors"
+              style={{ background: showEnhancement ? 'var(--color-primary-light)' : undefined }}
             >
-              {enhancing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-              {enhancing ? 'Thinking…' : 'Enhance'}
+              <Sparkles size={13} />
+              Enhance with Helper Monkey
             </button>
             <button onClick={() => onEdit(role)} className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-background)] transition-colors" aria-label="Edit">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
@@ -167,14 +104,11 @@ function RoleSection({ role, children, onVerify, onEdit, onDelete }: RoleSection
         </div>
 
         {showEnhancement && (
-          <div>
-            <EnhancementPanel text={enhancementText} loading={enhancing} />
-            {!enhancing && (
-              <button onClick={() => setShowEnhancement(false)} className="mt-2 text-[12px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors">
-                Close
-              </button>
-            )}
-          </div>
+          <EnhancementPanel
+            role={role}
+            children={children}
+            onClose={() => setShowEnhancement(false)}
+          />
         )}
       </div>
 
