@@ -36,50 +36,32 @@ interface Story {
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-const DEMO_QUESTIONS: Question[] = [
-  {
-    id: 'q1',
-    text: 'Tell me about a time you had to align multiple stakeholders on a difficult decision.',
-    type: 'stakeholder',
-    priority: 'high',
-    answerShape: 'Tension → Intervention → Outcome → Learning',
-  },
-  {
-    id: 'q2',
-    text: 'Describe your biggest professional failure and what you learned.',
-    type: 'failure',
-    priority: 'high',
-    answerShape: 'Context → Mistake → Consequence → What I did → What I learned',
-  },
-  {
-    id: 'q3',
-    text: 'How do you decide what not to build?',
-    type: 'strategy',
-    priority: 'high',
-    answerShape: 'Framework → Trade-off → Example → Outcome',
-  },
-  {
-    id: 'q4',
-    text: 'Tell me about a time you led a team through significant change.',
-    type: 'leadership',
-    priority: 'medium',
-    answerShape: 'Context → Challenge → Actions → Result → Learning',
-  },
-  {
-    id: 'q5',
-    text: 'Give me an example of when you had to influence without authority.',
-    type: 'leadership',
-    priority: 'medium',
-    answerShape: 'Situation → Stakeholders → Approach → Outcome',
-  },
-  {
-    id: 'q6',
-    text: 'Tell me about a time you used data to challenge a widely-held assumption.',
-    type: 'commercial',
-    priority: 'medium',
-    answerShape: 'Assumption → Data → Insight → Action → Impact',
-  },
-]
+const DEFAULT_ANSWER_SHAPES: Record<QuestionType, string> = {
+  stakeholder: 'Tension → Intervention → Outcome → Learning',
+  failure: 'Context → Mistake → Consequence → What I did → What I learned',
+  strategy: 'Framework → Trade-off → Example → Outcome',
+  leadership: 'Context → Challenge → Actions → Result → Learning',
+  commercial: 'Assumption → Data → Insight → Action → Impact',
+}
+
+const VALID_TYPES = new Set<QuestionType>(['stakeholder', 'failure', 'strategy', 'leadership', 'commercial'])
+
+function toQuestionType(raw: string): QuestionType {
+  return VALID_TYPES.has(raw as QuestionType) ? (raw as QuestionType) : 'strategy'
+}
+
+function toQuestions(likelyQuestions: Array<{ id: string; text: string; type: string; priority: string; why_likely?: string }>): Question[] {
+  return likelyQuestions.map((q) => {
+    const type = toQuestionType(q.type)
+    return {
+      id: q.id,
+      text: q.text,
+      type,
+      priority: (q.priority === 'high' || q.priority === 'medium' || q.priority === 'low') ? q.priority : 'medium',
+      answerShape: DEFAULT_ANSWER_SHAPES[type],
+    }
+  })
+}
 
 const TRANSFORM_MODES: TransformMode[] = [
   'More concise',
@@ -141,8 +123,29 @@ export default function AnswerLabPage() {
   const [copied, setCopied] = useState(false)
   const [showAddQuestion, setShowAddQuestion] = useState(false)
   const [customQuestion, setCustomQuestion] = useState('')
-  const [questions, setQuestions] = useState<Question[]>(DEMO_QUESTIONS)
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [activePack, setActivePack] = useState<{ id: string; title: string } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Load questions from most recent pack in localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('im:packs')
+      if (stored) {
+        const packs = JSON.parse(stored)
+        if (Array.isArray(packs) && packs.length > 0) {
+          // Most recently created pack is first
+          const pack = packs[0]
+          if (Array.isArray(pack.likely_questions) && pack.likely_questions.length > 0) {
+            setQuestions(toQuestions(pack.likely_questions))
+            setActivePack({ id: pack.id, title: pack.title })
+            return
+          }
+        }
+      }
+    } catch { /* ignore */ }
+    // No pack yet — leave questions empty so the empty state CTA shows
+  }, [])
 
   // Load real stories from localStorage on mount
   useEffect(() => {
@@ -307,12 +310,19 @@ export default function AnswerLabPage() {
           className="flex items-center justify-between px-4 py-3 border-b shrink-0"
           style={{ borderColor: 'var(--color-border)' }}
         >
-          <h1
-            className="text-[16px] font-semibold"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
-            Answer Lab
-          </h1>
+          <div>
+            <h1
+              className="text-[16px] font-semibold"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              Answer Lab
+            </h1>
+            {activePack && (
+              <p className="text-[11px] mt-0.5 truncate max-w-[200px]" style={{ color: 'var(--color-text-muted)' }}>
+                {activePack.title}
+              </p>
+            )}
+          </div>
           <button
             onClick={() => setShowAddQuestion((v) => !v)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-medium transition-colors"
@@ -423,7 +433,19 @@ export default function AnswerLabPage() {
 
         {/* Question list */}
         <div className="flex-1 overflow-y-auto py-2">
-          {visibleGroups.length === 0 ? (
+          {questions.length === 0 ? (
+            <div className="px-4 py-8 text-center space-y-3">
+              <p className="text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+                No questions yet.
+              </p>
+              <p className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
+                <a href="/packs/new" className="underline" style={{ color: 'var(--color-primary)' }}>
+                  Create an interview pack
+                </a>{' '}
+                to generate tailored questions for your role.
+              </p>
+            </div>
+          ) : visibleGroups.length === 0 ? (
             <p
               className="px-4 py-8 text-[13px] text-center"
               style={{ color: 'var(--color-text-muted)' }}

@@ -5,7 +5,17 @@ import { Breadcrumbs } from '@/components/layout/breadcrumbs'
 
 export const metadata: Metadata = { title: 'Mock Interview Studio' }
 
-const MODES = [
+const MODES: Array<{
+  id: string
+  icon: typeof Mic2
+  label: string
+  description: string
+  badge: string
+  badgeColour: string
+  href: string | null
+  cta: string
+  available: boolean
+}> = [
   {
     id: 'ai',
     icon: Mic2,
@@ -22,22 +32,22 @@ const MODES = [
     icon: Users,
     label: 'Human-Led Mock',
     description: 'A friend, mentor, or coach asks questions naturally. Interview Monkey listens and surfaces prompts on your performance screen.',
-    badge: 'R3 — Dual surface',
+    badge: 'Coming soon',
     badgeColour: 'var(--color-signal-warning)',
-    href: '/live/demo-session',
+    href: null,
     cta: 'Set up session',
-    available: true,
+    available: false,
   },
   {
     id: 'live',
     icon: Video,
     label: 'Live Workspace',
     description: 'Teleprompter mode for real interviews. Second screen shows minimal cues while you focus on the video call.',
-    badge: 'R3 — Pro',
+    badge: 'Coming soon',
     badgeColour: 'var(--color-primary)',
-    href: '/live/demo-session',
+    href: null,
     cta: 'Open live workspace',
-    available: true,
+    available: false,
   },
 ]
 
@@ -81,13 +91,24 @@ export default function MockPage() {
                 <p className="text-[16px] font-semibold text-[var(--color-text-primary)]">{mode.label}</p>
                 <p className="text-[13px] text-[var(--color-text-secondary)] mt-1 leading-relaxed">{mode.description}</p>
               </div>
-              <Link
-                href={mode.href}
-                className="flex items-center justify-between w-full px-4 py-2.5 bg-[var(--color-primary)] text-white rounded-[var(--radius-xl)] text-[14px] font-semibold hover:bg-[var(--color-primary-dark)] transition-colors"
-              >
-                {mode.cta}
-                <ArrowRight size={15} />
-              </Link>
+              {mode.href ? (
+                <Link
+                  href={mode.href}
+                  className="flex items-center justify-between w-full px-4 py-2.5 bg-[var(--color-primary)] text-white rounded-[var(--radius-xl)] text-[14px] font-semibold hover:bg-[var(--color-primary-dark)] transition-colors"
+                >
+                  {mode.cta}
+                  <ArrowRight size={15} />
+                </Link>
+              ) : (
+                <button
+                  disabled
+                  className="flex items-center justify-between w-full px-4 py-2.5 rounded-[var(--radius-xl)] text-[14px] font-semibold opacity-40 cursor-not-allowed"
+                  style={{ background: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+                >
+                  {mode.cta}
+                  <ArrowRight size={15} />
+                </button>
+              )}
             </div>
           )
         })}
