@@ -10,10 +10,8 @@ export async function middleware(request: NextRequest) {
   const flags = getDemoFlags()
 
   // In full demo mode (no Supabase), allow all routes
+  // Landing page (/) is always accessible; skip auth redirect for login/signup
   if (flags.auth) {
-    if (AUTH_PATHS.some((p) => pathname.startsWith(p))) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
-    }
     return NextResponse.next()
   }
 
