@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Sparkles, ChevronDown, ChevronUp, CheckCheck } from 'lucide-react'
+import { ArrowRight, Sparkles, ChevronDown, ChevronUp, CheckCheck, Tag } from 'lucide-react'
 import { GraphNodeCard, type GraphNode, type NodeType } from '@/components/candidate-graph/graph-node-card'
 import { NodeEditorModal } from '@/components/candidate-graph/node-editor-modal'
 import { EnhancementPanel } from '@/components/candidate-graph/enhancement-panel'
@@ -114,17 +114,20 @@ function RoleSection({ role, children, onVerify, onEdit, onDelete, onAddNode }: 
         )}
       </div>
 
-      {/* Children */}
-      {children.length > 0 && (
-        <div className="border-t border-[var(--color-border)] bg-[var(--color-background)] px-5 py-3">
-          <button
-            onClick={() => setChildrenExpanded((v) => !v)}
-            className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors mb-3"
-          >
-            {childrenExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            {children.length} career moment{children.length !== 1 ? 's' : ''}
-          </button>
-          {childrenExpanded && (
+      {/* Children — always show section, empty state when none */}
+      <div className="border-t border-[var(--color-border)] bg-[var(--color-background)] px-5 py-3">
+        <button
+          onClick={() => setChildrenExpanded((v) => !v)}
+          className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors mb-3"
+        >
+          {childrenExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          {children.length > 0
+            ? `${children.length} career moment${children.length !== 1 ? 's' : ''}`
+            : '0 career moments yet'
+          }
+        </button>
+        {childrenExpanded && (
+          children.length > 0 ? (
             <div className="ml-6 pl-5 border-l-2 border-[var(--color-primary)]/20">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {children.map((child) => (
@@ -132,9 +135,14 @@ function RoleSection({ role, children, onVerify, onEdit, onDelete, onAddNode }: 
                 ))}
               </div>
             </div>
-          )}
-        </div>
-      )}
+          ) : (
+            <p className="text-[12px] ml-5 pl-2 border-l-2 border-dashed border-[var(--color-border)] pb-1" style={{ color: 'var(--color-text-muted)' }}>
+              Helper Monkey had some questions he needs answering first about potential moments here — try{' '}
+              <span className="font-medium" style={{ color: 'var(--color-primary)' }}>Enhance with Helper Monkey</span> to unlock them.
+            </p>
+          )
+        )}
+      </div>
     </div>
   )
 }
@@ -152,6 +160,53 @@ function InlineToast({ toast, onDismiss }: { toast: ToastState; onDismiss: () =>
       style={{ background: ok ? '#D1FAE5' : '#FEE2E2', borderColor: ok ? '#6EE7B7' : '#FCA5A5', color: ok ? '#065F46' : '#991B1B' }}>
       <span>{toast.message}</span>
       <button onClick={onDismiss} className="shrink-0 opacity-60 hover:opacity-100 transition-opacity" aria-label="Dismiss">✕</button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Skills accordion
+// ---------------------------------------------------------------------------
+
+function SkillsAccordion({ skills }: { skills: string[] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-[var(--color-surface)] transition-colors"
+        style={{ background: 'var(--color-background)' }}
+      >
+        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        <Tag size={13} style={{ color: 'var(--color-primary)' }} />
+        <span className="text-[12px] font-semibold uppercase tracking-wider flex-1" style={{ color: 'var(--color-text-muted)' }}>
+          Skills
+        </span>
+        <span
+          className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+          style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
+        >
+          {skills.length}
+        </span>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-1 flex flex-wrap gap-2" style={{ background: 'var(--color-surface)' }}>
+          {skills.map((s) => (
+            <span
+              key={s}
+              className="px-3 py-1 rounded-full text-[12px] font-medium border"
+              style={{
+                background: 'var(--color-primary-light)',
+                color: 'var(--color-primary)',
+                borderColor: 'color-mix(in srgb, var(--color-primary) 20%, transparent)',
+              }}
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -338,17 +393,6 @@ export function GraphView({ initialNodes, initialSkills }: GraphViewProps) {
 
   return (
     <div className="space-y-4">
-      {/* Skills tags */}
-      {skills.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {skills.map((s) => (
-            <span key={s} className="px-3 py-1 rounded-full text-[12px] font-medium border" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', borderColor: 'color-mix(in srgb, var(--color-primary) 20%, transparent)' }}>
-              {s}
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* Action bar */}
       <div className="flex items-center gap-2 justify-end">
         {hasUnverified && (
@@ -384,6 +428,9 @@ export function GraphView({ initialNodes, initialSkills }: GraphViewProps) {
           </div>
         </div>
       )}
+
+      {/* Skills — collapsed accordion at the bottom */}
+      {skills.length > 0 && <SkillsAccordion skills={skills} />}
 
       <NodeEditorModal node={editingNode} onSave={handleSave} onClose={() => setEditingNode(null)} />
     </div>

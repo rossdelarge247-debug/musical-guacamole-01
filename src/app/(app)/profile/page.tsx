@@ -1,10 +1,26 @@
 import type { Metadata } from 'next'
-import { CVUpload } from '@/components/onboarding/cv-upload'
 import { Breadcrumbs } from '@/components/layout/breadcrumbs'
+import { ProfileContent } from './_content'
+import { createClient } from '@/lib/supabase/server'
+import { getDemoFlags } from '@/lib/demo/flags'
 
 export const metadata: Metadata = { title: 'My Professional History' }
 
-export default function ProfilePage() {
+async function getFirstName(): Promise<string | null> {
+  const flags = getDemoFlags()
+  if (flags.auth) return null
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+    const fullName = user.user_metadata?.full_name ?? user.user_metadata?.name
+    return fullName ? fullName.split(' ')[0] : null
+  } catch { return null }
+}
+
+export default async function ProfilePage() {
+  const firstName = await getFirstName()
+
   return (
     <div className="space-y-6">
       <div className="space-y-1">
@@ -12,12 +28,9 @@ export default function ProfilePage() {
         <h1 className="text-[30px] font-semibold text-[var(--color-text-primary)]">
           My Professional History
         </h1>
-        <p className="text-[15px] text-[var(--color-text-secondary)]">
-          Upload your CV to build your Candidate Graph and story bank.
-        </p>
       </div>
 
-      <CVUpload />
+      <ProfileContent firstName={firstName} />
     </div>
   )
 }

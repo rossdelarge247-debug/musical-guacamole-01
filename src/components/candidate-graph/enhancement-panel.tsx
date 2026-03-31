@@ -402,8 +402,10 @@ export function EnhancementPanel({ role, children, onClose, onAddNode }: Enhance
       if (!res.ok) throw new Error(await res.text().catch(() => `HTTP ${res.status}`))
       const nodeData = await res.json()
       onAddNode(nodeData)
-      setActiveIntake((prev) => prev ? { ...prev, phase: 'done' } : null)
       updateItem(si, item.id, 'accepted')
+      // Show "done" briefly then auto-dismiss the intake form
+      setActiveIntake((prev) => prev ? { ...prev, phase: 'done' } : null)
+      setTimeout(() => setActiveIntake(null), 1800)
     } catch (err) {
       setActiveIntake((prev) => prev
         ? { ...prev, phase: 'error', error: err instanceof Error ? err.message : 'Helper Monkey got confused. Try again.' }
@@ -653,26 +655,45 @@ export function EnhancementPanel({ role, children, onClose, onAddNode }: Enhance
           })}
 
           {/* Footer */}
-          <div
-            className="flex items-center justify-between px-4 py-3 border-t"
-            style={{ borderColor: 'var(--color-border)' }}
-          >
-            <button
-              onClick={run}
-              className="flex items-center gap-1.5 text-[12px] font-medium transition-colors hover:opacity-80"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              <RefreshCw size={12} />
-              Try again
-            </button>
-            <button
-              onClick={onClose}
-              className="text-[12px] font-medium transition-colors hover:opacity-80"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              Close
-            </button>
-          </div>
+          {(() => {
+            const anyAccepted = sections.some((s) => s.items.some((i) => i.status === 'accepted'))
+            return (
+              <div
+                className="flex items-center justify-between px-4 py-3 border-t"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                {anyAccepted ? (
+                  <button
+                    onClick={run}
+                    className="flex items-center gap-1.5 text-[12px] font-medium transition-colors hover:opacity-60"
+                    style={{ color: 'var(--color-text-muted)' }}
+                  >
+                    <RefreshCw size={12} />
+                    Run again
+                  </button>
+                ) : (
+                  <button
+                    onClick={run}
+                    className="flex items-center gap-1.5 text-[12px] font-medium transition-colors hover:opacity-80"
+                    style={{ color: 'var(--color-text-muted)' }}
+                  >
+                    <RefreshCw size={12} />
+                    Try again
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className={`text-[13px] font-semibold px-4 py-1.5 rounded-[var(--radius-md)] transition-colors ${anyAccepted ? 'text-white' : ''}`}
+                  style={anyAccepted
+                    ? { background: 'var(--color-primary)', color: '#fff' }
+                    : { color: 'var(--color-text-muted)' }
+                  }
+                >
+                  {anyAccepted ? 'Finish ✓' : 'Close'}
+                </button>
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>

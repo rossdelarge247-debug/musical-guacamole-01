@@ -124,12 +124,30 @@ export function CVUpload() {
               return
             } else if (event.type === 'complete') {
               setResult(event.data)
-              // Save to localStorage
+              // Save to localStorage (with fileName for profile page)
               try {
+                const savedAt = Date.now()
+                // Push previous graph to history before overwriting
+                const existing = localStorage.getItem('im:graph')
+                if (existing) {
+                  const old = JSON.parse(existing)
+                  if (old.savedAt) {
+                    const history: Array<{ fileName: string; uploadedAt: number; headline: string; nodeCount: number }> =
+                      JSON.parse(localStorage.getItem('im:cv-history') ?? '[]')
+                    history.unshift({
+                      fileName: old.fileName ?? 'CV',
+                      uploadedAt: old.savedAt,
+                      headline: old.profile?.headline ?? '',
+                      nodeCount: old.nodes?.length ?? 0,
+                    })
+                    localStorage.setItem('im:cv-history', JSON.stringify(history.slice(0, 5)))
+                  }
+                }
                 localStorage.setItem('im:graph', JSON.stringify({
                   profile: event.data.profile,
                   nodes: event.data.nodes ?? [],
-                  savedAt: Date.now(),
+                  savedAt,
+                  fileName: fileName ?? 'Pasted text',
                 }))
               } catch { /* ignore */ }
               // Skip done state — go straight to Candidate Graph

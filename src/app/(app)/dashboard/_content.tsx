@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Upload } from 'lucide-react'
 import { GraphView } from '@/components/candidate-graph/graph-view'
+import { QuotePanel } from '@/components/quote-panel'
 import type { GraphNode } from '@/components/candidate-graph/graph-node-card'
 
 interface GraphData {
@@ -82,6 +83,9 @@ export function DashboardContent({ firstName }: { firstName: string | null }) {
           </Link>
         </div>
       )}
+
+      {/* Quote panel — above the graph */}
+      {graphData && <QuotePanel position="top" />}
 
       {/* Candidate Graph — after CV uploaded, this IS the dashboard */}
       {graphData && (
