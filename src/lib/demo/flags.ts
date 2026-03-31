@@ -11,29 +11,25 @@
 
 import type { DemoFlags } from '@/types'
 
-function missing(key: string): boolean {
-  return !process.env[key] || process.env[key]!.trim() === ''
-}
-
 export function getDemoFlags(): DemoFlags {
   return {
     // No Supabase → use in-memory store + email/password only
-    auth: missing('NEXT_PUBLIC_SUPABASE_URL') || missing('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
+    auth: !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 
     // No Anthropic key → return labelled fixture responses
-    ai: missing('ANTHROPIC_API_KEY'),
+    ai: !process.env.ANTHROPIC_API_KEY,
 
     // No Deepgram key → use browser Web Speech API
-    transcription: missing('DEEPGRAM_API_KEY'),
+    transcription: !process.env.DEEPGRAM_API_KEY,
 
     // No Stripe key → use Stripe test mode stubs
-    payments: missing('STRIPE_SECRET_KEY'),
+    payments: !process.env.STRIPE_SECRET_KEY,
 
     // No Resend key → log emails to console
-    email: missing('RESEND_API_KEY'),
+    email: !process.env.RESEND_API_KEY,
 
     // No Supabase storage → use local /tmp or in-memory
-    storage: missing('NEXT_PUBLIC_SUPABASE_URL'),
+    storage: !process.env.NEXT_PUBLIC_SUPABASE_URL,
   }
 }
 

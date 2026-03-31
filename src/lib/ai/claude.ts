@@ -14,12 +14,11 @@ import { getDemoFlags } from '@/lib/demo/flags'
 export const CLAUDE_SONNET = 'claude-sonnet-4-6'
 export const CLAUDE_OPUS = 'claude-opus-4-6'
 
-// Tasks that warrant Opus
+// Tasks that warrant Opus (deep reasoning — requires claude-opus-4-6 access)
 const OPUS_TASKS = new Set([
   'signal_analysis',
   'pressure_point_detection',
   'jd_deep_analysis',
-  'candidate_graph_extraction',
 ])
 
 let _client: Anthropic | null = null
