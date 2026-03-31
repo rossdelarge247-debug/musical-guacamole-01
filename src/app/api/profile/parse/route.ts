@@ -215,8 +215,8 @@ export async function POST(request: Request) {
           ],
         })
 
-        let chunkBuffer = ''
         let lastProgressAt = 0
+        const emittedDiscoveries = new Set<string>()
 
         for await (const event of stream) {
           if (
@@ -224,14 +224,12 @@ export async function POST(request: Request) {
             event.delta.type === 'text_delta'
           ) {
             fullResponse += event.delta.text
-            chunkBuffer += event.delta.text
 
-            // Parse partial JSON to stream discoveries as they appear
+            // Throttle: scan for NEW discoveries every 800ms
             const now = Date.now()
             if (now - lastProgressAt > 800) {
               lastProgressAt = now
-              const discovery = extractDiscovery(fullResponse)
-              if (discovery) {
+              for (const discovery of extractNewDiscoveries(fullResponse, emittedDiscoveries)) {
                 await writer.write(encodeEvent({ type: 'found', ...discovery }))
               }
             }
@@ -406,25 +404,57 @@ export async function POST(request: Request) {
   })
 }
 
-// ── Partial JSON scraper — finds roles/achievements as Claude writes ──────────
-function extractDiscovery(
+// ── Partial JSON scraper — finds all new discoveries as Claude writes ─────────
+function extractNewDiscoveries(
   partial: string,
-): { category: string; value: string } | null {
-  // Look for role nodes being written
-  const roleMatch = partial.match(/"type"\s*:\s*"role"[^}]*"title"\s*:\s*"([^"]+)"[^}]*"organisation"\s*:\s*"([^"]+)"/)
-  if (roleMatch) return { category: 'Role', value: `${roleMatch[1]} · ${roleMatch[2]}` }
+  emitted: Set<string>,
+): Array<{ category: string; value: string }> {
+  const results: Array<{ category: string; value: string }> = []
 
-  const achieveMatch = partial.match(/"type"\s*:\s*"achievement"[^}]*"title"\s*:\s*"([^"]+)"/)
-  if (achieveMatch) return { category: 'Achievement', value: achieveMatch[1] }
+  function emit(category: string, value: string) {
+    const key = `${category}:${value}`
+    if (!emitted.has(key)) {
+      emitted.add(key)
+      results.push({ category, value })
+    }
+  }
 
-  const failMatch = partial.match(/"type"\s*:\s*"failure"[^}]*"title"\s*:\s*"([^"]+)"/)
-  if (failMatch) return { category: 'Learning', value: failMatch[1] }
+  // Headline — emitted once
+  for (const m of partial.matchAll(/"headline"\s*:\s*"([^"]{20,})"/g)) {
+    emit('Profile', m[1])
+  }
 
-  const proofMatch = partial.match(/"type"\s*:\s*"proof_point"[^}]*"title"\s*:\s*"([^"]+)"/)
-  if (proofMatch) return { category: 'Proof point', value: proofMatch[1] }
+  // Role nodes — title only (organisation often repeated in the title itself)
+  for (const m of partial.matchAll(/"type"\s*:\s*"role"[\s\S]*?"title"\s*:\s*"([^"]+)"/g)) {
+    // Try to also get organisation if present without duplicating
+    const orgMatch = partial.slice(m.index ?? 0, (m.index ?? 0) + 300)
+      .match(/"organisation"\s*:\s*"([^"]+)"/)
+    const title = m[1]
+    const org = orgMatch?.[1]
+    // Only append org if it doesn't already appear in the title
+    const value = org && !title.includes(org) ? `${title} · ${org}` : title
+    emit('Role', value)
+  }
 
-  const headlineMatch = partial.match(/"headline"\s*:\s*"([^"]{20,})"/)
-  if (headlineMatch) return { category: 'Profile', value: headlineMatch[1] }
+  // Achievement nodes
+  for (const m of partial.matchAll(/"type"\s*:\s*"achievement"[\s\S]*?"title"\s*:\s*"([^"]+)"/g)) {
+    emit('Achievement', m[1])
+  }
 
-  return null
+  // Failure / lesson nodes
+  for (const m of partial.matchAll(/"type"\s*:\s*"failure"[\s\S]*?"title"\s*:\s*"([^"]+)"/g)) {
+    emit('Learning', m[1])
+  }
+
+  // Proof points
+  for (const m of partial.matchAll(/"type"\s*:\s*"proof_point"[\s\S]*?"title"\s*:\s*"([^"]+)"/g)) {
+    emit('Proof point', m[1])
+  }
+
+  // Decisions
+  for (const m of partial.matchAll(/"type"\s*:\s*"decision"[\s\S]*?"title"\s*:\s*"([^"]+)"/g)) {
+    emit('Decision', m[1])
+  }
+
+  return results
 }
