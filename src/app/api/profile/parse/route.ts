@@ -101,13 +101,14 @@ export async function POST(request: Request) {
   ;(async () => {
     try {
       // ── Debug: emit env var status as first event ──
+      const rawKey = process.env['ANTHROPIC_API_KEY']
       await writer.write(
         encodeEvent({
           type: 'debug',
           ai_demo: flags.ai,
           auth_demo: flags.auth,
-          anthropic_key: process.env.ANTHROPIC_API_KEY
-            ? `set (${process.env.ANTHROPIC_API_KEY.length} chars)`
+          anthropic_key: rawKey
+            ? `set (${rawKey.length} chars)`
             : 'NOT SET',
         }),
       )
@@ -200,7 +201,7 @@ export async function POST(request: Request) {
         encodeEvent({ type: 'status', message: 'Claude is reading your CV…' }),
       )
 
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+      const client = new Anthropic({ apiKey: process.env['ANTHROPIC_API_KEY'] })
       let fullResponse = ''
 
       try {
