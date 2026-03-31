@@ -3,9 +3,7 @@ import withPWA from '@ducanh2912/next-pwa'
 
 const nextConfig: NextConfig = {
   experimental: {
-    serverActions: {
-      allowedOrigins: ['localhost:3000'],
-    },
+    serverActions: {},
   },
   images: {
     remotePatterns: [
