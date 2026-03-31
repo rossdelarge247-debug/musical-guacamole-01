@@ -16,13 +16,14 @@ export async function POST(request: Request) {
     }
 
     const flags = getDemoFlags()
-    const supabase = await createClient()
 
     let userId = 'demo-user'
     let profile: CandidateProfile
     let nodes: CandidateGraphNode[]
     let stories: Story[]
     let pressurePoints: PressurePoint[]
+    // supabase is only initialised when Supabase is configured (flags.auth === false)
+    let supabase: Awaited<ReturnType<typeof createClient>> | null = null
 
     if (flags.auth) {
       // Demo mode — use fixture data
@@ -31,11 +32,12 @@ export async function POST(request: Request) {
       stories = [] as Story[]
       pressurePoints = [] as PressurePoint[]
     } else {
-      const { data: { user } } = await supabase.auth.getUser()
+      supabase = await createClient()
+      const { data: { user } } = await supabase!.auth.getUser()
       if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
       userId = user.id
 
-      const { data: p } = await supabase
+      const { data: p } = await supabase!
         .from('candidate_profiles')
         .select('*')
         .eq('user_id', userId)
@@ -44,19 +46,19 @@ export async function POST(request: Request) {
       if (!p) return NextResponse.json({ error: 'Build your profile first' }, { status: 400 })
       profile = p
 
-      const { data: n } = await supabase
+      const { data: n } = await supabase!
         .from('candidate_graph_nodes')
         .select('*')
         .eq('profile_id', p.id)
       nodes = n ?? []
 
-      const { data: s } = await supabase
+      const { data: s } = await supabase!
         .from('stories')
         .select('*')
         .eq('profile_id', p.id)
       stories = s ?? []
 
-      const { data: pp } = await supabase
+      const { data: pp } = await supabase!
         .from('pressure_points')
         .select('*')
         .eq('profile_id', p.id)
@@ -97,7 +99,7 @@ export async function POST(request: Request) {
     // Save new stories if mined
     let storyIds: string[] = stories.map((s) => s.id)
     if (minedStories.length > 0) {
-      const { data: savedStories } = await supabase
+      const { data: savedStories } = await supabase!
         .from('stories')
         .insert(minedStories.map((s) => ({ ...s, profile_id: profile.id })))
         .select('id')
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
     // Save pressure points if detected
     let ppIds: string[] = pressurePoints.map((p) => p.id)
     if (detectedPressure.length > 0) {
-      const { data: savedPP } = await supabase
+      const { data: savedPP } = await supabase!
         .from('pressure_points')
         .insert(detectedPressure.map((p) => ({ ...p, profile_id: profile.id })))
         .select('id')
@@ -115,7 +117,7 @@ export async function POST(request: Request) {
     }
 
     // Create the pack
-    const { data: pack, error } = await supabase
+    const { data: pack, error } = await supabase!
       .from('job_packs')
       .insert({
         user_id: userId,
@@ -157,10 +159,10 @@ export async function GET() {
   }
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase!.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
-  const { data: packs } = await supabase
+  const { data: packs } = await supabase!
     .from('job_packs')
     .select('id, title, company, role_level, interview_type, created_at, readiness_scores')
     .eq('user_id', user.id)

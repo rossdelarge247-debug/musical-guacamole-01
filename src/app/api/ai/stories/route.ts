@@ -7,12 +7,12 @@ import { mineStories } from '@/lib/ai/engines/story'
 export async function POST() {
   try {
     const flags = getDemoFlags()
-    const supabase = await createClient()
 
     if (flags.auth) {
       return NextResponse.json({ stories: getDemoStories(), demo: true })
     }
 
+    const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 

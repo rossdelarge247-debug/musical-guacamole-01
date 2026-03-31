@@ -16,11 +16,12 @@ export async function POST(request: Request) {
     }
 
     const flags = getDemoFlags()
-    const supabase = await createClient()
 
     // Get authenticated user (or demo user)
     let userId = 'demo-user'
+    let supabase: Awaited<ReturnType<typeof createClient>> | null = null
     if (!flags.auth) {
+      supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
       userId = user.id
@@ -91,7 +92,7 @@ Return JSON with:
     }
 
     // --- Upsert profile ---
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await supabase!
       .from('candidate_profiles')
       .upsert({
         user_id: userId,
@@ -124,7 +125,7 @@ Return JSON with:
       user_verified: false,
     }))
 
-    const { data: nodes } = await supabase
+    const { data: nodes } = await supabase!
       .from('candidate_graph_nodes')
       .insert(nodesToInsert)
       .select()
