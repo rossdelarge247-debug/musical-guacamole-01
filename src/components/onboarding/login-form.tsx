@@ -50,7 +50,7 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
       const supabase = createClient()
       await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback?redirect=${redirectTo}` },
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
       })
     } catch {
       setError('Google sign in failed.')
