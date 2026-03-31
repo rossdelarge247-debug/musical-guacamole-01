@@ -99,61 +99,65 @@ export async function POST(request: Request) {
     })
   }
 
-  // ── Real Claude call with retry on overload ───────────────────────────────
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY() })
-  const userMessage = buildUserMessage(role, children)
+  // ── Real Claude call — use TransformStream so errors write as text ────────
+  // (ReadableStream.controller.error() can propagate as a 500 on some runtimes)
+  const transform = new TransformStream()
+  const writer = transform.writable.getWriter()
+  const encoder = new TextEncoder()
 
-  const MAX_ATTEMPTS = 3
-  const RETRY_DELAYS = [8000, 16000]
-
-  let lastError: unknown = null
-
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt - 1]))
-    }
-
+  ;(async () => {
     try {
-      const anthropicStream = client.messages.stream({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        system: ENHANCE_SYSTEM,
-        messages: [{ role: 'user', content: userMessage }],
-      })
+      const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY() })
+      const userMessage = buildUserMessage(role, children)
 
-      const encoder = new TextEncoder()
-      const readable = new ReadableStream({
-        async start(controller) {
-          try {
-            for await (const event of anthropicStream) {
-              if (
-                event.type === 'content_block_delta' &&
-                event.delta.type === 'text_delta'
-              ) {
-                controller.enqueue(encoder.encode(event.delta.text))
-              }
+      const MAX_ATTEMPTS = 3
+      const RETRY_DELAYS = [8000, 16000]
+
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt - 1]))
+        }
+
+        try {
+          const anthropicStream = client.messages.stream({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 1024,
+            system: ENHANCE_SYSTEM,
+            messages: [{ role: 'user', content: userMessage }],
+          })
+
+          for await (const event of anthropicStream) {
+            if (
+              event.type === 'content_block_delta' &&
+              event.delta.type === 'text_delta'
+            ) {
+              await writer.write(encoder.encode(event.delta.text))
             }
-            controller.close()
-          } catch (err) {
-            controller.error(err)
           }
-        },
-      })
 
-      return new Response(readable, {
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      })
+          await writer.close()
+          return
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          const isOverload =
+            msg.includes('overloaded') || msg.includes('529') || msg.includes('overload_error')
+          if (!isOverload || attempt === MAX_ATTEMPTS - 1) {
+            await writer.write(encoder.encode(`Helper Monkey went home. Try again in a moment. (${msg})`))
+            await writer.close()
+            return
+          }
+        }
+      }
     } catch (err) {
-      lastError = err
       const msg = err instanceof Error ? err.message : String(err)
-      const isOverload =
-        msg.includes('overloaded') || msg.includes('529') || msg.includes('overload_error')
-      if (!isOverload || attempt === MAX_ATTEMPTS - 1) break
+      try {
+        await writer.write(encoder.encode(`Helper Monkey went home. (${msg})`))
+        await writer.close()
+      } catch { /* writer may already be closed */ }
     }
-  }
+  })()
 
-  const errMsg = lastError instanceof Error ? lastError.message : String(lastError)
-  return new Response(`Helper Monkey went home. Try again in a moment. (${errMsg})`, {
-    status: 503,
+  return new Response(transform.readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
   })
 }
