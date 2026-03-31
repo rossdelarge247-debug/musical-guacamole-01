@@ -1,42 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, CheckCheck } from 'lucide-react'
+import { ArrowRight, Sparkles, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { Breadcrumbs } from '@/components/layout/breadcrumbs'
 import { PageLoading } from '@/components/ui/loading-spinner'
 import { GraphNodeCard, type GraphNode, type NodeType } from '@/components/candidate-graph/graph-node-card'
 import { NodeEditorModal } from '@/components/candidate-graph/node-editor-modal'
-
-// ---------------------------------------------------------------------------
-// Filter tabs
-// ---------------------------------------------------------------------------
-
-type FilterKey = 'all' | NodeType
-
-const FILTER_TABS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'role', label: 'Roles' },
-  { key: 'achievement', label: 'Achievements' },
-  { key: 'proof_point', label: 'Proof Points' },
-  { key: 'failure', label: 'Failures' },
-  { key: 'lesson', label: 'Lessons' },
-]
-
-// ---------------------------------------------------------------------------
-// Stat card
-// ---------------------------------------------------------------------------
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] px-4 py-3 flex flex-col gap-0.5">
-      <span className="text-[22px] font-bold text-[var(--color-text-primary)] tabular-nums">
-        {value}
-      </span>
-      <span className="text-[12px] text-[var(--color-text-muted)]">{label}</span>
-    </div>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Inline toast
@@ -72,6 +42,220 @@ function InlineToast({ toast, onDismiss }: { toast: ToastState; onDismiss: () =>
 }
 
 // ---------------------------------------------------------------------------
+// Role grouping
+// ---------------------------------------------------------------------------
+
+function groupNodesByRole(nodes: GraphNode[]): {
+  groups: Array<{ role: GraphNode; children: GraphNode[] }>
+  ungrouped: GraphNode[]
+} {
+  const childTypes: Set<NodeType> = new Set(['achievement', 'proof_point', 'failure', 'lesson', 'decision', 'signal', 'stakeholder'])
+
+  const roles = nodes
+    .filter((n) => n.type === 'role')
+    .sort((a, b) => (b.date_from ?? '').localeCompare(a.date_from ?? ''))
+
+  const allChildren = nodes.filter((n) => childTypes.has(n.type))
+  const assigned = new Set<string>()
+
+  const groups = roles.map((role) => {
+    const children = allChildren.filter((n) => {
+      if (assigned.has(n.id)) return false
+      // Match by organisation
+      if (
+        role.organisation &&
+        n.organisation &&
+        role.organisation.toLowerCase().trim() === n.organisation.toLowerCase().trim()
+      ) {
+        return true
+      }
+      // Match by date overlap
+      if (role.date_from && n.date_from) {
+        const roleEnd = role.date_to ?? '9999-12'
+        const nodeEnd = n.date_to ?? n.date_from
+        return n.date_from <= roleEnd && nodeEnd >= role.date_from
+      }
+      return false
+    })
+    children.forEach((n) => assigned.add(n.id))
+    return { role, children }
+  })
+
+  const ungrouped = allChildren.filter((n) => !assigned.has(n.id))
+  return { groups, ungrouped }
+}
+
+// ---------------------------------------------------------------------------
+// RoleSection component
+// ---------------------------------------------------------------------------
+
+interface RoleSectionProps {
+  role: GraphNode
+  children: GraphNode[]
+  onVerify: (id: string) => void
+  onEdit: (node: GraphNode) => void
+  onDelete: (id: string) => void
+}
+
+function RoleSection({ role, children, onVerify, onEdit, onDelete }: RoleSectionProps) {
+  const [enhancing, setEnhancing] = useState(false)
+  const [enhancementText, setEnhancementText] = useState('')
+  const [showEnhancement, setShowEnhancement] = useState(false)
+  const [childrenExpanded, setChildrenExpanded] = useState(true)
+
+  const dateRange = [role.date_from, role.date_to].filter(Boolean).join(' – ')
+
+  async function handleEnhance() {
+    setShowEnhancement(true)
+    setEnhancing(true)
+    setEnhancementText('')
+    try {
+      const res = await fetch('/api/ai/role/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, children }),
+      })
+      if (!res.ok || !res.body) throw new Error('Failed')
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        setEnhancementText((prev) => prev + decoder.decode(value, { stream: true }))
+      }
+    } catch {
+      setEnhancementText('Helper Monkey is lost… try again in a moment.')
+    } finally {
+      setEnhancing(false)
+    }
+  }
+
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+      {/* Role header */}
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-0 space-y-1">
+            <h2 className="text-[18px] font-semibold text-[var(--color-text-primary)]">
+              {role.title}
+            </h2>
+            {(role.organisation || dateRange) && (
+              <p className="text-[14px] text-[var(--color-text-secondary)]">
+                {[role.organisation, dateRange].filter(Boolean).join(' · ')}
+              </p>
+            )}
+            {role.description && (
+              <p className="text-[14px] text-[var(--color-text-primary)] mt-2 leading-relaxed">
+                {role.description}
+              </p>
+            )}
+            {role.metrics && role.metrics.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {role.metrics.map((m, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--color-primary)]/20"
+                  >
+                    {m}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleEnhance}
+              disabled={enhancing}
+              className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-[var(--radius-md)] border border-[var(--color-primary)]/30 text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {enhancing ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Sparkles size={13} />
+              )}
+              {enhancing ? 'Enhancing…' : 'Enhance with Helper Monkey'}
+            </button>
+            <button
+              onClick={() => onEdit(role)}
+              className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-background)] transition-colors"
+              aria-label="Edit role"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => onDelete(role.id)}
+              className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors"
+              aria-label="Delete role"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Enhancement panel */}
+        {showEnhancement && (
+          <div className="bg-[var(--color-background)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-4 mt-3 text-[13px] leading-relaxed whitespace-pre-wrap">
+            {enhancing && !enhancementText && (
+              <span className="text-[var(--color-text-muted)]">Helper Monkey is thinking…</span>
+            )}
+            {enhancementText}
+            {!enhancing && (
+              <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
+                <button
+                  onClick={() => setShowEnhancement(false)}
+                  className="text-[12px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Children */}
+      {children.length > 0 && (
+        <div className="border-t border-[var(--color-border)] bg-[var(--color-background)] px-5 py-3">
+          <button
+            onClick={() => setChildrenExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors mb-3"
+          >
+            {childrenExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            {children.length} career moment{children.length !== 1 ? 's' : ''}
+          </button>
+
+          {childrenExpanded && (
+            <div className="ml-6 pl-5 border-l-2 border-[var(--color-primary)]/20">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {children.map((child) => (
+                  <GraphNodeCard
+                    key={child.id}
+                    node={child}
+                    onVerify={onVerify}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -79,10 +263,10 @@ export default function CandidateGraphPage() {
   const router = useRouter()
 
   const [nodes, setNodes] = useState<GraphNode[]>([])
+  const [skills, setSkills] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [filter, setFilter] = useState<FilterKey>('all')
   const [editingNode, setEditingNode] = useState<GraphNode | null>(null)
   const [miningStories, setMiningStories] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
@@ -94,8 +278,7 @@ export default function CandidateGraphPage() {
     return () => clearTimeout(t)
   }, [toast])
 
-  // Fetch graph on mount — prefer localStorage (real CV data) over the API
-  // demo fixture, fall back to API for authenticated Supabase sessions
+  // Fetch graph on mount — prefer localStorage, fall back to API
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -104,10 +287,11 @@ export default function CandidateGraphPage() {
         try {
           const stored = localStorage.getItem('im:graph')
           if (stored) {
-            const { nodes: localNodes } = JSON.parse(stored)
+            const { nodes: localNodes, profile } = JSON.parse(stored)
             if (Array.isArray(localNodes) && localNodes.length > 0) {
               if (!cancelled) {
                 setNodes(localNodes)
+                setSkills(profile?.skills ?? [])
                 setLoading(false)
               }
               return
@@ -143,7 +327,6 @@ export default function CandidateGraphPage() {
       if (!res.ok) throw new Error('Verify failed')
       setToast({ type: 'success', message: 'Node verified.' })
     } catch {
-      // Rollback
       setNodes((prev) =>
         prev.map((n) => (n.id === id ? { ...n, user_verified: false } : n)),
       )
@@ -221,15 +404,8 @@ export default function CandidateGraphPage() {
     }
   }, [router])
 
-  // Derived stats
-  const totalNodes = nodes.length
-  const verifiedCount = nodes.filter((n) => n.user_verified).length
-  const rolesCount = nodes.filter((n) => n.type === 'role').length
-  const achievementsCount = nodes.filter((n) => n.type === 'achievement').length
-
-  // Filtered nodes
-  const visibleNodes =
-    filter === 'all' ? nodes : nodes.filter((n) => n.type === filter)
+  // Memoised role grouping
+  const { groups, ungrouped } = useMemo(() => groupNodesByRole(nodes), [nodes])
 
   // ---------------------------------------------------------------------------
   // Render
@@ -243,7 +419,7 @@ export default function CandidateGraphPage() {
           <Breadcrumbs
             crumbs={[
               { label: 'Dashboard', href: '/dashboard' },
-              { label: 'My Profile', href: '/profile' },
+              { label: 'My Professional History', href: '/profile' },
               { label: 'Candidate Graph' },
             ]}
           />
@@ -253,9 +429,22 @@ export default function CandidateGraphPage() {
           <p className="text-[15px] text-[var(--color-text-secondary)] max-w-xl">
             Review and correct what we extracted — everything here powers your stories and answers.
           </p>
+          {/* Skills tags */}
+          {skills.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {skills.map((s) => (
+                <span
+                  key={s}
+                  className="px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--color-primary)]/20"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* CTA */}
+        {/* Mine Stories CTA */}
         <button
           onClick={handleMineStories}
           disabled={miningStories || loading || nodes.length === 0}
@@ -267,9 +456,7 @@ export default function CandidateGraphPage() {
       </div>
 
       {/* Inline toast */}
-      {toast && (
-        <InlineToast toast={toast} onDismiss={() => setToast(null)} />
-      )}
+      {toast && <InlineToast toast={toast} onDismiss={() => setToast(null)} />}
 
       {/* Loading */}
       {loading && <PageLoading label="Loading your Candidate Graph…" />}
@@ -284,75 +471,49 @@ export default function CandidateGraphPage() {
       {/* Content */}
       {!loading && !error && (
         <>
-          {/* Stats row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Total nodes" value={totalNodes} />
-            <StatCard label="Verified" value={verifiedCount} />
-            <StatCard label="Roles" value={rolesCount} />
-            <StatCard label="Achievements" value={achievementsCount} />
-          </div>
+          {/* Role groups */}
+          {groups.map(({ role, children }) => (
+            <RoleSection
+              key={role.id}
+              role={role}
+              children={children}
+              onVerify={handleVerify}
+              onEdit={setEditingNode}
+              onDelete={handleDelete}
+            />
+          ))}
 
-          {/* Filter + Verify All */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Tabs */}
-            <div className="flex items-center gap-1 bg-[var(--color-background)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-1">
-              {FILTER_TABS.map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setFilter(tab.key)}
-                  className={[
-                    'px-3 py-1.5 rounded-[var(--radius-sm)] text-[13px] font-medium transition-colors duration-[var(--transition-fast)]',
-                    filter === tab.key
-                      ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
-                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]',
-                  ].join(' ')}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Verify All */}
-            {nodes.some((n) => !n.user_verified) && (
-              <button
-                onClick={handleVerifyAll}
-                className="ml-auto flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-signal-strong)] border border-[var(--color-signal-strong)]/30 hover:bg-[#D1FAE5] px-3 py-1.5 rounded-[var(--radius-md)] transition-colors duration-[var(--transition-fast)]"
-              >
-                <CheckCheck size={14} />
-                Verify All
-              </button>
-            )}
-          </div>
-
-          {/* Empty state */}
-          {visibleNodes.length === 0 && (
-            <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--color-border)] py-16 text-center">
-              <p className="text-[15px] text-[var(--color-text-muted)]">
-                {nodes.length === 0
-                  ? 'No nodes yet — upload your CV to build your Candidate Graph.'
-                  : 'No nodes match this filter.'}
-              </p>
+          {/* Ungrouped */}
+          {ungrouped.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+                Other
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {ungrouped.map((node) => (
+                  <GraphNodeCard
+                    key={node.id}
+                    node={node}
+                    onVerify={handleVerify}
+                    onEdit={setEditingNode}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Grid */}
-          {visibleNodes.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {visibleNodes.map((node) => (
-                <GraphNodeCard
-                  key={node.id}
-                  node={node}
-                  onVerify={handleVerify}
-                  onEdit={setEditingNode}
-                  onDelete={handleDelete}
-                />
-              ))}
+          {/* Empty state */}
+          {nodes.length === 0 && (
+            <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--color-border)] py-16 text-center">
+              <p className="text-[15px] text-[var(--color-text-muted)]">
+                No nodes yet — upload your CV to build your Candidate Graph.
+              </p>
             </div>
           )}
         </>
       )}
 
-      {/* Edit modal */}
       <NodeEditorModal
         node={editingNode}
         onSave={handleSave}

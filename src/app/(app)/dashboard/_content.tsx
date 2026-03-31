@@ -2,56 +2,41 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { BriefcaseBusiness, FlaskConical, Mic2, ArrowRight, Upload } from 'lucide-react'
+import { Upload, ArrowRight, CheckCircle2 } from 'lucide-react'
 
-const QUICK_ACTIONS = [
-  {
-    label: 'Build an Interview Pack',
-    description: 'Upload a JD and get your prep plan in minutes',
-    href: '/packs/new',
-    icon: BriefcaseBusiness,
-    colour: 'var(--color-primary)',
-    bg: 'var(--color-primary-light)',
-  },
-  {
-    label: 'Open Answer Lab',
-    description: 'Craft and refine your best answers',
-    href: '/answer-lab',
-    icon: FlaskConical,
-    colour: '#7C3AED',
-    bg: '#EDE9FE',
-  },
-  {
-    label: 'Start a Mock',
-    description: 'Practice with AI or a human coach',
-    href: '/mock',
-    icon: Mic2,
-    colour: '#10B981',
-    bg: '#D1FAE5',
-  },
-]
+interface GraphData {
+  headline: string
+  skills: string[]
+  nodeCount: number
+}
 
 export function DashboardContent({ firstName }: { firstName: string | null }) {
-  const [hasCv, setHasCv] = useState<boolean | null>(null)
+  const [graphData, setGraphData] = useState<GraphData | null | false>(null)
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem('im:graph')
       if (stored) {
         const parsed = JSON.parse(stored)
-        setHasCv(Array.isArray(parsed.nodes) && parsed.nodes.length > 0)
-      } else {
-        setHasCv(false)
+        if (Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
+          setGraphData({
+            headline: parsed.profile?.headline ?? '',
+            skills: Array.isArray(parsed.profile?.skills) ? parsed.profile.skills : [],
+            nodeCount: parsed.nodes.length,
+          })
+          return
+        }
       }
+      setGraphData(false)
     } catch {
-      setHasCv(false)
+      setGraphData(false)
     }
   }, [])
 
   const greeting = firstName ? `Welcome, ${firstName}` : 'Welcome back'
 
   // Wait for localStorage check before rendering to avoid layout flicker
-  if (hasCv === null) return null
+  if (graphData === null) return null
 
   return (
     <div className="space-y-8">
@@ -66,7 +51,7 @@ export function DashboardContent({ firstName }: { firstName: string | null }) {
       </div>
 
       {/* Getting started banner — shown until CV is uploaded */}
-      {!hasCv && (
+      {graphData === false && (
         <div className="bg-[var(--color-primary)] rounded-[var(--radius-lg)] p-6 flex items-center justify-between gap-6 text-white">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider opacity-80">
@@ -89,78 +74,62 @@ export function DashboardContent({ firstName }: { firstName: string | null }) {
         </div>
       )}
 
-      {/* Quick actions — shown after CV uploaded */}
-      {hasCv && (
-        <div>
-          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
-            QUICK ACTIONS
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {QUICK_ACTIONS.map((action) => {
-              const Icon = action.icon
-              return (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  className="group bg-white border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-card-hover)] transition-all duration-[var(--transition-base)]"
-                >
-                  <div
-                    className="w-9 h-9 rounded-[var(--radius-md)] flex items-center justify-center mb-3"
-                    style={{ background: action.bg }}
-                  >
-                    <Icon size={18} style={{ color: action.colour }} />
-                  </div>
-                  <p className="text-[15px] font-semibold text-[var(--color-text-primary)]">
-                    {action.label}
-                  </p>
-                  <p className="text-[13px] text-[var(--color-text-secondary)] mt-0.5">
-                    {action.description}
-                  </p>
-                  <div className="flex items-center gap-1 mt-3 text-[13px] font-medium text-[var(--color-primary)] opacity-0 group-hover:opacity-100 transition-opacity">
-                    Go <ArrowRight size={13} />
-                  </div>
-                </Link>
-              )
-            })}
+      {/* Candidate Graph ready panel — shown after CV uploaded */}
+      {graphData && (
+        <div
+          className="rounded-[var(--radius-lg)] border p-6 space-y-5"
+          style={{ background: '#F0FDF4', borderColor: '#BBF7D0' }}
+        >
+          {/* Header */}
+          <div className="flex items-start gap-3">
+            <CheckCircle2 size={22} style={{ color: '#16A34A' }} className="shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[16px] font-semibold" style={{ color: '#15803D' }}>
+                Your Candidate Graph is ready
+              </p>
+              {graphData.headline && (
+                <p className="text-[14px] mt-0.5" style={{ color: '#166534' }}>
+                  {graphData.headline}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Readiness heat map — shown after CV uploaded */}
-      {hasCv && (
-        <div>
-          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
-            READINESS HEAT MAP
-          </h2>
-          <div className="bg-white border border-[var(--color-border)] rounded-[var(--radius-lg)] p-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                'Opening pitch',
-                'Leadership',
-                'Failure',
-                'Conflict',
-                'Ambiguity',
-                'Evidence',
-                'Executive presence',
-                'Motivation',
-              ].map((area) => (
-                <div key={area} className="space-y-1.5">
-                  <p className="text-[12px] font-medium text-[var(--color-text-secondary)]">
-                    {area}
-                  </p>
-                  <div className="h-2 bg-[var(--color-background)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-[var(--color-border-strong)]"
-                      style={{ width: '0%' }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-[var(--color-text-muted)]">Not started</p>
-                </div>
+          {/* Node count */}
+          <p className="text-[14px] font-medium" style={{ color: '#166534' }}>
+            {graphData.nodeCount} career moment{graphData.nodeCount !== 1 ? 's' : ''} mapped
+          </p>
+
+          {/* Skills */}
+          {graphData.skills.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {graphData.skills.slice(0, 10).map((s) => (
+                <span
+                  key={s}
+                  className="px-2.5 py-1 rounded-full text-[12px] font-medium"
+                  style={{ background: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' }}
+                >
+                  {s}
+                </span>
               ))}
             </div>
-            <p className="text-[13px] text-[var(--color-text-muted)] mt-4 text-center">
-              Complete your first Interview Pack to see your readiness scores.
-            </p>
+          )}
+
+          {/* CTAs */}
+          <div className="flex items-center gap-3 flex-wrap pt-1">
+            <Link
+              href="/profile/graph"
+              className="inline-flex items-center gap-2 bg-[var(--color-primary)] text-white font-semibold text-[14px] px-5 py-2.5 rounded-[var(--radius-xl)] hover:opacity-90 transition-opacity"
+            >
+              Review Candidate Graph
+              <ArrowRight size={14} />
+            </Link>
+            <Link
+              href="/packs/new"
+              className="inline-flex items-center gap-2 bg-white text-[var(--color-primary)] font-semibold text-[14px] px-5 py-2.5 rounded-[var(--radius-xl)] border border-[var(--color-primary)]/30 hover:bg-[var(--color-primary-light)] transition-colors"
+            >
+              Build Interview Pack
+            </Link>
           </div>
         </div>
       )}

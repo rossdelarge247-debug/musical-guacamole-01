@@ -124,16 +124,16 @@ export function CVUpload() {
               return
             } else if (event.type === 'complete') {
               setResult(event.data)
-              // Persist to localStorage so graph page can display real data
-              // without needing Supabase
+              // Save to localStorage
               try {
                 localStorage.setItem('im:graph', JSON.stringify({
                   profile: event.data.profile,
                   nodes: event.data.nodes ?? [],
                   savedAt: Date.now(),
                 }))
-              } catch { /* storage quota or private browsing — ignore */ }
-              setPhase('done')
+              } catch { /* ignore */ }
+              // Skip done state — go straight to Candidate Graph
+              window.location.href = '/profile/graph'
               return
             }
           } catch {
