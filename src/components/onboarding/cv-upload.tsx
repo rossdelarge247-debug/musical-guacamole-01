@@ -133,7 +133,7 @@ export function CVUpload() {
                 }))
               } catch { /* ignore */ }
               // Skip done state — go straight to Candidate Graph
-              window.location.href = '/profile/graph'
+              window.location.href = '/dashboard'
               return
             }
           } catch {
