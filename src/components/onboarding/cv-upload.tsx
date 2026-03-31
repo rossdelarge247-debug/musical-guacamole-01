@@ -174,7 +174,8 @@ export function CVUpload() {
 
   // ── Done state ──────────────────────────────────────────────────────────────
   if (phase === 'done' && result) {
-    const { profile, summary } = result
+    const { profile, summary, demo } = result
+    const safeSummary = summary ?? { nodeCount: 0, roleCount: 0, achievementCount: 0, skillCount: 0 }
     const confidence = Math.round((profile.parsing_confidence ?? 0.8) * 100)
     return (
       <div className="space-y-5">
@@ -188,6 +189,7 @@ export function CVUpload() {
             <div>
               <p className="text-[15px] font-semibold" style={{ color: '#15803D' }}>
                 Candidate Graph built — {confidence}% confidence
+                {demo && <span className="ml-2 text-[11px] font-normal px-1.5 py-0.5 rounded" style={{ background: '#FEF9C3', color: '#92400E' }}>DEMO — add ANTHROPIC_API_KEY for real analysis</span>}
               </p>
               <p className="text-[13px] mt-0.5" style={{ color: '#166534' }}>
                 {profile.headline}
@@ -199,10 +201,10 @@ export function CVUpload() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Graph nodes', value: summary.nodeCount },
-            { label: 'Roles found', value: summary.roleCount },
-            { label: 'Achievements', value: summary.achievementCount },
-            { label: 'Skills', value: summary.skillCount },
+            { label: 'Graph nodes', value: safeSummary.nodeCount },
+            { label: 'Roles found', value: safeSummary.roleCount },
+            { label: 'Achievements', value: safeSummary.achievementCount },
+            { label: 'Skills', value: safeSummary.skillCount },
           ].map((s) => (
             <div
               key={s.label}
@@ -292,7 +294,7 @@ export function CVUpload() {
                 return (
                   <div
                     key={d.id}
-                    className="flex items-start gap-2.5 px-3 py-2 rounded-lg animate-in slide-in-from-bottom-1 duration-200"
+                    className="flex items-start gap-2.5 px-3 py-2 rounded-lg"
                     style={{ background: '#F9FAFB' }}
                   >
                     <Icon size={13} className="shrink-0 mt-0.5" style={{ color }} />

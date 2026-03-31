@@ -175,6 +175,7 @@ export async function POST(request: Request) {
         const demoResult = {
           profile: { id: 'demo-profile', user_id: userId, headline: 'Experienced product leader with a track record of cross-functional delivery and commercial impact', skills: ['Product Strategy', 'Stakeholder Management', 'Data Analysis', 'Agile Delivery', 'Commercial Awareness'], level: 'mid', parsing_confidence: 0.87 },
           nodes: [],
+          summary: { nodeCount: 4, roleCount: 1, achievementCount: 2, skillCount: 5 },
           demo: true,
         }
         await writer.write(encodeEvent({ type: 'complete', data: demoResult }))
