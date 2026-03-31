@@ -94,11 +94,28 @@ export default function CandidateGraphPage() {
     return () => clearTimeout(t)
   }, [toast])
 
-  // Fetch graph on mount
+  // Fetch graph on mount — prefer localStorage (real CV data) over the API
+  // demo fixture, fall back to API for authenticated Supabase sessions
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
+        // Check localStorage first (populated by cv-upload after Claude parse)
+        try {
+          const stored = localStorage.getItem('im:graph')
+          if (stored) {
+            const { nodes: localNodes } = JSON.parse(stored)
+            if (Array.isArray(localNodes) && localNodes.length > 0) {
+              if (!cancelled) {
+                setNodes(localNodes)
+                setLoading(false)
+              }
+              return
+            }
+          }
+        } catch { /* ignore parse errors */ }
+
+        // Fall back to API (real Supabase session or empty state)
         const res = await fetch('/api/profile/graph')
         if (!res.ok) throw new Error(`Failed to load graph (${res.status})`)
         const data = await res.json()
