@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { SkipForward, X, Quote } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { SkipForward, X } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Library — intentionally false, comedic, and philosophical
@@ -29,26 +29,18 @@ const LS_INDEX = 'im:quote-index'
 // Component
 // ---------------------------------------------------------------------------
 
-interface QuotePanelProps {
-  position?: 'top' | 'bottom'
-}
-
-export function QuotePanel({ position = 'top' }: QuotePanelProps) {
-  const [hidden, setHidden] = useState(true) // default hidden until localStorage check
+export function QuotePanel() {
+  const [hidden, setHidden] = useState(true)
   const [quoteIndex, setQuoteIndex] = useState(0)
   const [confirming, setConfirming] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    const isHidden = localStorage.getItem(LS_HIDDEN) === 'true'
-    setHidden(isHidden)
-    const savedIndex = parseInt(localStorage.getItem(LS_INDEX) ?? '0', 10)
-    setQuoteIndex(isNaN(savedIndex) ? 0 : savedIndex % QUOTES.length)
+    setHidden(localStorage.getItem(LS_HIDDEN) === 'true')
+    const saved = parseInt(localStorage.getItem(LS_INDEX) ?? '0', 10)
+    setQuoteIndex(isNaN(saved) ? 0 : saved % QUOTES.length)
   }, [])
-
-  // Randomly vary position on mount if not specified
-  const resolvedPosition = useMemo(() => position, [position])
 
   if (!mounted || hidden) return null
 
@@ -69,90 +61,92 @@ export function QuotePanel({ position = 'top' }: QuotePanelProps) {
 
   return (
     <div
-      className={`relative overflow-hidden rounded-[var(--radius-lg)] px-5 py-4 border ${resolvedPosition === 'bottom' ? 'mt-2' : 'mb-2'}`}
+      className="relative overflow-hidden rounded-[var(--radius-lg)] border px-8 py-8 text-center"
       style={{
-        background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
-        borderColor: '#FCD34D',
+        background: 'var(--color-surface)',
+        borderColor: 'var(--color-border)',
       }}
     >
-      {/* Background decoration */}
+      {/* Decorative opening quote mark */}
       <div
-        className="absolute -top-3 -left-2 text-[80px] font-serif leading-none select-none pointer-events-none"
-        style={{ color: '#F59E0B', opacity: 0.15 }}
+        className="absolute top-3 left-5 text-[72px] font-serif leading-none select-none pointer-events-none"
+        style={{ color: 'var(--color-primary)', opacity: 0.08 }}
         aria-hidden
       >
         &ldquo;
       </div>
 
-      <div className="relative flex items-start gap-3">
-        {/* Icon */}
-        <div
-          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5"
-          style={{ background: '#F59E0B' }}
-        >
-          <Quote size={12} className="text-white" />
-        </div>
+      {!confirming ? (
+        <>
+          <p
+            className="relative text-[22px] leading-relaxed italic mx-auto max-w-2xl"
+            style={{
+              color: 'var(--color-text-primary)',
+              fontFamily: 'Georgia, "Times New Roman", serif',
+            }}
+          >
+            &ldquo;{quote.text}&rdquo;
+          </p>
 
-        <div className="flex-1 min-w-0">
-          {!confirming ? (
-            <>
-              <p className="text-[13px] leading-relaxed font-medium italic" style={{ color: '#78350F' }}>
-                &ldquo;{quote.text}&rdquo;
-              </p>
-              <p className="text-[11px] mt-1.5 font-semibold" style={{ color: '#92400E' }}>
-                {quote.attribution}
-              </p>
-            </>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-[12px] leading-relaxed font-medium" style={{ color: '#78350F' }}>
-                Please confirm you don&apos;t want to inject any humour into your job hunting journey, because you&apos;re in this now for the love of the game and want no distractions.
-              </p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={handleConfirmHide}
-                  className="text-[11px] font-semibold px-3 py-1.5 rounded-full transition-colors"
-                  style={{ background: '#78350F', color: '#FEF3C7' }}
-                >
-                  Yes. I am this person.
-                </button>
-                <button
-                  onClick={() => setConfirming(false)}
-                  className="text-[11px] font-medium px-3 py-1.5 rounded-full border transition-colors"
-                  style={{ borderColor: '#F59E0B', color: '#92400E', background: 'transparent' }}
-                >
-                  On second thought, I need this
-                </button>
-              </div>
-              <p className="text-[10px]" style={{ color: '#B45309' }}>
-                You can restore it later from My Professional History.
-              </p>
-            </div>
-          )}
-        </div>
+          <p
+            className="mt-4 text-[13px] font-medium tracking-wide"
+            style={{ color: 'var(--color-text-muted)', fontFamily: 'Georgia, "Times New Roman", serif' }}
+          >
+            {quote.attribution}
+          </p>
 
-        {!confirming && (
-          <div className="flex items-center gap-1 shrink-0">
+          {/* Controls */}
+          <div className="flex items-center justify-center gap-3 mt-5">
             <button
               onClick={handleSkip}
-              className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-full transition-colors hover:opacity-80"
-              style={{ color: '#92400E', background: 'rgba(245, 158, 11, 0.2)' }}
-              title="Another gem"
+              className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-[var(--radius-md)] border transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
             >
-              <SkipForward size={11} />
-              Next
+              <SkipForward size={12} />
+              Another gem
             </button>
             <button
               onClick={() => setConfirming(true)}
-              className="p-1.5 rounded-full transition-colors hover:opacity-70"
-              style={{ color: '#B45309' }}
-              aria-label="Hide quote panel"
+              className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-[var(--radius-md)] border transition-colors hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
             >
-              <X size={13} />
+              <X size={12} />
+              Hide
             </button>
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        <div className="space-y-3 max-w-lg mx-auto">
+          <p
+            className="text-[15px] leading-relaxed italic"
+            style={{
+              color: 'var(--color-text-secondary)',
+              fontFamily: 'Georgia, "Times New Roman", serif',
+            }}
+          >
+            Please confirm you don&apos;t want to inject any humour into your job hunting journey — because you&apos;re in this now for the love of the game and want no distractions.
+          </p>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <button
+              onClick={handleConfirmHide}
+              className="text-[12px] font-semibold px-4 py-2 rounded-[var(--radius-md)] border transition-colors hover:bg-[var(--color-background)]"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              Yes. I am this person.
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="text-[12px] font-semibold px-4 py-2 rounded-[var(--radius-md)] transition-colors text-white"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              On second thought, I need this
+            </button>
+          </div>
+          <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+            You can restore it from My Professional History.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

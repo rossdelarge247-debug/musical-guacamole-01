@@ -277,8 +277,8 @@ export function ProfileContent({ firstName }: ProfileContentProps) {
         </div>
       )}
 
-      {/* Quote panel at bottom of profile page */}
-      <QuotePanel position="bottom" />
+      {/* Wisdom Corner — bottom of page */}
+      <QuotePanel />
     </div>
   )
 }

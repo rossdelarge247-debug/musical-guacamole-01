@@ -84,13 +84,15 @@ export function DashboardContent({ firstName }: { firstName: string | null }) {
         </div>
       )}
 
-      {/* Quote panel — above the graph */}
-      {graphData && <QuotePanel position="top" />}
+      {/* Quote panel — below the graph, inserted after GraphView */}
 
       {/* Candidate Graph — after CV uploaded, this IS the dashboard */}
       {graphData && (
         <GraphView initialNodes={graphData.nodes} initialSkills={graphData.skills} />
       )}
+
+      {/* Wisdom Corner — always at the bottom */}
+      {graphData && <QuotePanel />}
     </div>
   )
 }
