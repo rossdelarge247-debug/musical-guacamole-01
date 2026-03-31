@@ -164,7 +164,7 @@ export async function POST(request: Request) {
       await writer.write(
         encodeEvent({
           type: 'status',
-          message: `Extracted ${wordCount.toLocaleString()} words — passing to Claude…`,
+          message: `Extracted ${wordCount.toLocaleString()} words — handing over to Helper Monkey…`,
         }),
       )
 
@@ -199,6 +199,15 @@ export async function POST(request: Request) {
       let fullResponse = ''
       const MAX_ATTEMPTS = 3
       const RETRY_DELAYS = [8000, 16000] // ms between attempts
+      const RETRY_MESSAGES = [
+        'Helper Monkey is having a banana break… trying again shortly',
+        'Helper Monkey is lost in the jungle… one last attempt',
+      ]
+      const START_MESSAGES = [
+        'Helper Monkey is reading your CV…',
+        'Helper Monkey is back from its break…',
+        'Helper Monkey is angry but trying anyway…',
+      ]
 
       let lastAttemptError: unknown = null
       let succeeded = false
@@ -207,13 +216,13 @@ export async function POST(request: Request) {
         if (attempt > 0) {
           const delay = RETRY_DELAYS[attempt - 1]
           await writer.write(
-            encodeEvent({ type: 'status', message: `Claude is busy — retrying in ${delay / 1000}s… (attempt ${attempt + 1}/${MAX_ATTEMPTS})` }),
+            encodeEvent({ type: 'status', message: `${RETRY_MESSAGES[attempt - 1]} (${delay / 1000}s)` }),
           )
           await new Promise((r) => setTimeout(r, delay))
         }
 
         await writer.write(
-          encodeEvent({ type: 'status', message: attempt === 0 ? 'Claude is reading your CV…' : 'Retrying with Claude…' }),
+          encodeEvent({ type: 'status', message: START_MESSAGES[attempt] }),
         )
 
         fullResponse = ''
@@ -267,7 +276,7 @@ export async function POST(request: Request) {
         await writer.write(
           encodeEvent({
             type: 'error',
-            message: `Claude API error after ${MAX_ATTEMPTS} attempts: ${msg}`,
+            message: `Helper Monkey went home. Try again in a moment. (${msg})`,
           }),
         )
         await writer.close()
@@ -276,7 +285,7 @@ export async function POST(request: Request) {
 
       // ── Parse final JSON ──
       await writer.write(
-        encodeEvent({ type: 'status', message: 'Building your Candidate Graph…' }),
+        encodeEvent({ type: 'status', message: 'Helper Monkey is building your Candidate Graph…' }),
       )
 
       let parsed: {
@@ -308,7 +317,7 @@ export async function POST(request: Request) {
         await writer.write(
           encodeEvent({
             type: 'error',
-            message: `Could not parse Claude's response as JSON. Raw output (first 400 chars): ${fullResponse.slice(0, 400)}`,
+            message: `Helper Monkey wrote something illegible. Raw output (first 400 chars): ${fullResponse.slice(0, 400)}`,
           }),
         )
         await writer.close()

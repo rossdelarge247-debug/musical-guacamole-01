@@ -284,7 +284,7 @@ export function CVUpload() {
           </div>
           <div>
             <p className="text-[14px] font-semibold" style={{ color: '#111827' }}>
-              {phase === 'extracting' ? 'Reading your CV…' : 'Claude is analysing your career…'}
+              {phase === 'extracting' ? 'Reading your CV…' : 'Helper Monkey is analysing your career…'}
             </p>
             <p className="text-[12px]" style={{ color: '#6B7280' }}>{statusMsg}</p>
           </div>
@@ -302,7 +302,7 @@ export function CVUpload() {
           >
             {debugInfo.ai_demo
               ? `⚠ ANTHROPIC_API_KEY not detected on server — using demo fixture`
-              : `✓ Claude connected (${debugInfo.anthropic_key})`}
+              : `✓ Helper Monkey is awake (${debugInfo.anthropic_key})`}
           </div>
         )}
 
