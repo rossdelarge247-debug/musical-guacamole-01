@@ -1,51 +1,164 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import {
+  Upload,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Briefcase,
+  Trophy,
+  Lightbulb,
+  BarChart2,
+  User,
+  ArrowRight,
+  Loader2,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type UploadState = 'idle' | 'uploading' | 'parsing' | 'done' | 'error'
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Phase = 'idle' | 'extracting' | 'analysing' | 'done' | 'error'
+
+interface Discovery {
+  id: string
+  category: string
+  value: string
+}
+
+interface ParseResult {
+  profile: { headline: string; skills: string[]; parsing_confidence: number }
+  summary: { nodeCount: number; roleCount: number; achievementCount: number; skillCount: number }
+  demo: boolean
+}
+
+const CATEGORY_ICON: Record<string, React.ElementType> = {
+  Role: Briefcase,
+  Achievement: Trophy,
+  Learning: Lightbulb,
+  'Proof point': BarChart2,
+  Profile: User,
+}
+
+const CATEGORY_COLOR: Record<string, string> = {
+  Role: '#2557A7',
+  Achievement: '#059669',
+  Learning: '#D97706',
+  'Proof point': '#7C3AED',
+  Profile: '#0891B2',
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function CVUpload() {
-  const [state, setState] = useState<UploadState>('idle')
+  const [phase, setPhase] = useState<Phase>('idle')
   const [fileName, setFileName] = useState<string | null>(null)
   const [pasteMode, setPasteMode] = useState(false)
   const [pasteText, setPasteText] = useState('')
+  const [statusMsg, setStatusMsg] = useState('')
+  const [discoveries, setDiscoveries] = useState<Discovery[]>([])
+  const [result, setResult] = useState<ParseResult | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [errorStatus, setErrorStatus] = useState<number | null>(null)
+  const discoveryIdRef = useRef(0)
+  const listRef = useRef<HTMLDivElement>(null)
 
-  const onDrop = useCallback(async (accepted: File[]) => {
-    const file = accepted[0]
-    if (!file) return
-    setFileName(file.name)
-    setState('uploading')
+  function addDiscovery(category: string, value: string) {
+    const id = String(discoveryIdRef.current++)
+    setDiscoveries((prev) => [...prev, { id, category, value }])
+    // Auto-scroll discovery list
+    setTimeout(() => {
+      if (listRef.current) {
+        listRef.current.scrollTop = listRef.current.scrollHeight
+      }
+    }, 50)
+  }
+
+  async function runStream(body: FormData) {
+    setPhase('extracting')
+    setDiscoveries([])
     setErrorMsg(null)
-    setErrorStatus(null)
+    setStatusMsg('Starting…')
 
     try {
-      // Read file as text (PDF parsing happens server-side via AI)
-      const text = await file.text()
-      setState('parsing')
-
       const res = await fetch('/api/profile/parse', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, level: 'mid' }),
+        body,
       })
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setErrorStatus(res.status)
-        throw new Error(body.error ?? `HTTP ${res.status}`)
+      if (!res.ok || !res.body) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || `HTTP ${res.status}`)
       }
 
-      setState('done')
-    } catch (err: unknown) {
-      setState('error')
-      setErrorMsg(err instanceof Error ? err.message : 'Upload failed. Please try again.')
+      setPhase('analysing')
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        // Process complete newline-delimited JSON lines
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? '' // keep incomplete line in buffer
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed) continue
+          try {
+            const event = JSON.parse(trimmed)
+            if (event.type === 'status') {
+              setStatusMsg(event.message)
+            } else if (event.type === 'found') {
+              addDiscovery(event.category, event.value)
+            } else if (event.type === 'error') {
+              setErrorMsg(event.message)
+              setPhase('error')
+              return
+            } else if (event.type === 'complete') {
+              setResult(event.data)
+              setPhase('done')
+              return
+            }
+          } catch {
+            // malformed line — skip
+          }
+        }
+      }
+
+      if (phase !== 'done' && phase !== 'error') {
+        setErrorMsg('Stream ended without a result. Please try again.')
+        setPhase('error')
+      }
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Upload failed')
+      setPhase('error')
     }
-  }, [])
+  }
+
+  const onDrop = useCallback(
+    async (accepted: File[]) => {
+      const file = accepted[0]
+      if (!file) return
+      setFileName(file.name)
+      const form = new FormData()
+      form.append('file', file)
+      await runStream(form)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
+
+  async function handlePasteSubmit() {
+    if (!pasteText.trim()) return
+    setFileName(null)
+    const form = new FormData()
+    form.append('text', pasteText)
+    await runStream(form)
+  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -55,161 +168,245 @@ export function CVUpload() {
       'text/plain': ['.txt'],
     },
     maxFiles: 1,
-    maxSize: 5 * 1024 * 1024, // 5MB
-    disabled: state === 'uploading' || state === 'parsing',
+    maxSize: 5 * 1024 * 1024,
+    disabled: phase === 'extracting' || phase === 'analysing',
   })
 
-  async function handlePasteSubmit() {
-    if (!pasteText.trim()) return
-    setState('parsing')
-    setErrorMsg(null)
-    setErrorStatus(null)
-    try {
-      const res = await fetch('/api/profile/parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: pasteText, level: 'mid' }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setErrorStatus(res.status)
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
-      setState('done')
-    } catch (err: unknown) {
-      setState('error')
-      setErrorMsg(err instanceof Error ? err.message : 'Parsing failed. Please try again.')
-    }
-  }
-
-  if (state === 'done') {
+  // ── Done state ──────────────────────────────────────────────────────────────
+  if (phase === 'done' && result) {
+    const { profile, summary } = result
+    const confidence = Math.round((profile.parsing_confidence ?? 0.8) * 100)
     return (
-      <div className="bg-white border border-[var(--color-border)] rounded-[var(--radius-lg)] p-8 flex flex-col items-center gap-4 text-center">
-        <CheckCircle2 size={40} className="text-[var(--color-signal-strong)]" />
-        <div>
-          <p className="text-[17px] font-semibold text-[var(--color-text-primary)]">
-            Profile built successfully
-          </p>
-          <p className="text-[14px] text-[var(--color-text-secondary)] mt-1">
-            {fileName ? `Parsed from ${fileName}` : 'Parsed from your text'}
-            {' — '}review and edit your Candidate Graph below.
-          </p>
+      <div className="space-y-5">
+        {/* Success header */}
+        <div
+          className="rounded-xl p-5 border"
+          style={{ background: '#F0FDF4', borderColor: '#BBF7D0' }}
+        >
+          <div className="flex items-start gap-3">
+            <CheckCircle2 size={22} style={{ color: '#16A34A' }} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[15px] font-semibold" style={{ color: '#15803D' }}>
+                Candidate Graph built — {confidence}% confidence
+              </p>
+              <p className="text-[13px] mt-0.5" style={{ color: '#166534' }}>
+                {profile.headline}
+              </p>
+            </div>
+          </div>
         </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Graph nodes', value: summary.nodeCount },
+            { label: 'Roles found', value: summary.roleCount },
+            { label: 'Achievements', value: summary.achievementCount },
+            { label: 'Skills', value: summary.skillCount },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="rounded-lg p-3 text-center border"
+              style={{ background: '#FFFFFF', borderColor: '#E5E7EB' }}
+            >
+              <p className="text-[28px] font-bold" style={{ color: '#2557A7' }}>{s.value}</p>
+              <p className="text-[12px] mt-0.5" style={{ color: '#6B7280' }}>{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Skills */}
+        {profile.skills?.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>
+              Skills extracted
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {profile.skills.map((s) => (
+                <span
+                  key={s}
+                  className="px-2.5 py-1 rounded-full text-[12px] font-medium"
+                  style={{ background: '#EFF6FF', color: '#2557A7' }}
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <a
           href="/profile/graph"
-          className="flex items-center gap-2 bg-[var(--color-primary)] text-white font-semibold text-[14px] px-5 py-2.5 rounded-[var(--radius-xl)] hover:bg-[var(--color-primary-dark)] transition-colors"
+          className="inline-flex items-center gap-2 bg-[var(--color-primary)] text-white font-semibold text-[14px] px-5 py-2.5 rounded-xl hover:opacity-90 transition-opacity"
         >
-          Review Candidate Graph →
+          Review your Candidate Graph
+          <ArrowRight size={15} />
         </a>
       </div>
     )
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Persistent error banner — always visible, not hidden inside dropzone */}
-      {state === 'error' && errorMsg && (
-        <div className="rounded-lg border p-4" style={{ background: '#FEF2F2', borderColor: '#FECACA' }}>
+  // ── Analysing state ─────────────────────────────────────────────────────────
+  if (phase === 'extracting' || phase === 'analysing') {
+    return (
+      <div
+        className="rounded-xl border p-6 space-y-5"
+        style={{ background: '#FFFFFF', borderColor: '#E5E7EB' }}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="relative w-8 h-8 shrink-0">
+            <div
+              className="absolute inset-0 rounded-full animate-ping opacity-30"
+              style={{ background: '#2557A7' }}
+            />
+            <div
+              className="relative w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ background: '#2557A7' }}
+            >
+              <Loader2 size={15} className="text-white animate-spin" />
+            </div>
+          </div>
+          <div>
+            <p className="text-[14px] font-semibold" style={{ color: '#111827' }}>
+              {phase === 'extracting' ? 'Reading your CV…' : 'Claude is analysing your career…'}
+            </p>
+            <p className="text-[12px]" style={{ color: '#6B7280' }}>{statusMsg}</p>
+          </div>
+        </div>
+
+        {/* Discoveries feed */}
+        {discoveries.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>
+              Found so far
+            </p>
+            <div
+              ref={listRef}
+              className="space-y-1.5 max-h-64 overflow-y-auto pr-1"
+              style={{ scrollBehavior: 'smooth' }}
+            >
+              {discoveries.map((d) => {
+                const Icon = CATEGORY_ICON[d.category] ?? User
+                const color = CATEGORY_COLOR[d.category] ?? '#6B7280'
+                return (
+                  <div
+                    key={d.id}
+                    className="flex items-start gap-2.5 px-3 py-2 rounded-lg animate-in slide-in-from-bottom-1 duration-200"
+                    style={{ background: '#F9FAFB' }}
+                  >
+                    <Icon size={13} className="shrink-0 mt-0.5" style={{ color }} />
+                    <div className="min-w-0">
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wide mr-2"
+                        style={{ color }}
+                      >
+                        {d.category}
+                      </span>
+                      <span className="text-[13px]" style={{ color: '#374151' }}>
+                        {d.value}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Progress pulse */}
+        <div className="h-1 rounded-full overflow-hidden" style={{ background: '#E5E7EB' }}>
+          <div
+            className="h-full rounded-full animate-pulse"
+            style={{ background: '#2557A7', width: phase === 'extracting' ? '25%' : `${Math.min(25 + discoveries.length * 8, 90)}%`, transition: 'width 0.5s ease' }}
+          />
+        </div>
+
+        {fileName && (
+          <p className="text-[12px]" style={{ color: '#9CA3AF' }}>
+            <span className="font-mono">{fileName}</span>
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  // ── Error state ─────────────────────────────────────────────────────────────
+  if (phase === 'error') {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border p-4" style={{ background: '#FEF2F2', borderColor: '#FECACA' }}>
           <div className="flex items-start gap-3">
             <AlertCircle size={16} className="shrink-0 mt-0.5" style={{ color: '#DC2626' }} />
-            <div className="flex-1 min-w-0">
+            <div>
               <p className="text-[13px] font-semibold" style={{ color: '#DC2626' }}>
-                {errorStatus ? `Error ${errorStatus}` : 'Error'} — CV parsing failed
+                Parsing failed
               </p>
-              <p className="text-[12px] mt-1 break-words font-mono" style={{ color: '#991B1B' }}>
+              <p className="text-[12px] mt-1 font-mono break-words" style={{ color: '#991B1B' }}>
                 {errorMsg}
               </p>
             </div>
           </div>
         </div>
-      )}
-      {/* Mode toggle */}
+        <button
+          onClick={() => { setPhase('idle'); setDiscoveries([]) }}
+          className="text-[13px] font-medium px-4 py-2 rounded-lg border transition-colors"
+          style={{ borderColor: '#E5E7EB', color: '#374151' }}
+        >
+          Try again
+        </button>
+      </div>
+    )
+  }
+
+  // ── Idle state ──────────────────────────────────────────────────────────────
+  return (
+    <div className="space-y-4">
       <div className="flex gap-2">
-        <button
-          onClick={() => setPasteMode(false)}
-          className={cn(
-            'px-4 py-2 rounded-[var(--radius-md)] text-[14px] font-medium transition-colors',
-            !pasteMode
-              ? 'bg-[var(--color-primary)] text-white'
-              : 'bg-[var(--color-background)] text-[var(--color-text-secondary)] border border-[var(--color-border)] hover:border-[var(--color-primary)]',
-          )}
-        >
-          Upload file
-        </button>
-        <button
-          onClick={() => setPasteMode(true)}
-          className={cn(
-            'px-4 py-2 rounded-[var(--radius-md)] text-[14px] font-medium transition-colors',
-            pasteMode
-              ? 'bg-[var(--color-primary)] text-white'
-              : 'bg-[var(--color-background)] text-[var(--color-text-secondary)] border border-[var(--color-border)] hover:border-[var(--color-primary)]',
-          )}
-        >
-          Paste text
-        </button>
+        {['Upload file', 'Paste text'].map((label, i) => {
+          const active = i === 1 ? pasteMode : !pasteMode
+          return (
+            <button
+              key={label}
+              onClick={() => setPasteMode(i === 1)}
+              className={cn(
+                'px-4 py-2 rounded-lg text-[14px] font-medium transition-colors',
+                active
+                  ? 'bg-[var(--color-primary)] text-white'
+                  : 'bg-[var(--color-background)] text-[var(--color-text-secondary)] border border-[var(--color-border)] hover:border-[var(--color-primary)]',
+              )}
+            >
+              {label}
+            </button>
+          )
+        })}
       </div>
 
       {!pasteMode ? (
         <div
           {...getRootProps()}
           className={cn(
-            'bg-white border-2 border-dashed rounded-[var(--radius-lg)] p-12 flex flex-col items-center gap-3 text-center cursor-pointer transition-colors',
+            'bg-white border-2 border-dashed rounded-xl p-12 flex flex-col items-center gap-3 text-center cursor-pointer transition-colors',
             isDragActive
               ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]'
               : 'border-[var(--color-border)] hover:border-[var(--color-primary)]',
-            (state === 'uploading' || state === 'parsing') && 'pointer-events-none',
           )}
         >
           <input {...getInputProps()} />
-
-          {state === 'idle' && (
-            <>
-              <div className="w-12 h-12 rounded-[var(--radius-lg)] bg-[var(--color-primary-light)] flex items-center justify-center">
-                <Upload size={22} className="text-[var(--color-primary)]" />
-              </div>
-              <div>
-                <p className="text-[15px] font-semibold text-[var(--color-text-primary)]">
-                  {isDragActive ? 'Drop your CV here' : 'Drag and drop your CV'}
-                </p>
-                <p className="text-[13px] text-[var(--color-text-secondary)] mt-1">
-                  or <span className="text-[var(--color-primary)] font-medium">browse to upload</span>
-                </p>
-                <p className="text-[12px] text-[var(--color-text-muted)] mt-2">
-                  PDF, DOCX, or TXT — up to 5MB
-                </p>
-              </div>
-            </>
-          )}
-
-          {state === 'uploading' && (
-            <div className="flex flex-col items-center gap-2">
-              <Loader2 size={28} className="text-[var(--color-primary)] animate-spin" />
-              <p className="text-[14px] text-[var(--color-text-secondary)]">
-                Uploading {fileName}…
-              </p>
-            </div>
-          )}
-
-          {state === 'parsing' && (
-            <div className="flex flex-col items-center gap-2">
-              <Loader2 size={28} className="text-[var(--color-primary)] animate-spin" />
-              <p className="text-[15px] font-semibold text-[var(--color-text-primary)]">
-                Building your Candidate Graph
-              </p>
-              <p className="text-[13px] text-[var(--color-text-secondary)]">
-                Extracting roles, achievements, and stories…
-              </p>
-            </div>
-          )}
-
-          {state === 'error' && (
-            <div className="flex flex-col items-center gap-2">
-              <AlertCircle size={28} className="text-[var(--color-signal-critical)]" />
-              <p className="text-[13px] text-[var(--color-text-muted)]">
-                See error details above — fix and try again
-              </p>
-            </div>
-          )}
+          <div className="w-12 h-12 rounded-xl bg-[var(--color-primary-light)] flex items-center justify-center">
+            <Upload size={22} className="text-[var(--color-primary)]" />
+          </div>
+          <div>
+            <p className="text-[15px] font-semibold text-[var(--color-text-primary)]">
+              {isDragActive ? 'Drop your CV here' : 'Drag and drop your CV'}
+            </p>
+            <p className="text-[13px] text-[var(--color-text-secondary)] mt-1">
+              or <span className="text-[var(--color-primary)] font-medium">browse to upload</span>
+            </p>
+            <p className="text-[12px] text-[var(--color-text-muted)] mt-2">
+              PDF, DOCX, or TXT · up to 5MB
+            </p>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -222,15 +419,14 @@ export function CVUpload() {
             onChange={(e) => setPasteText(e.target.value)}
             placeholder="Paste your full CV or LinkedIn profile here…"
             rows={14}
-            className="w-full px-4 py-3 text-[14px] border border-[var(--color-border)] rounded-[var(--radius-lg)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors bg-white resize-none font-[var(--font-mono)] leading-relaxed"
+            className="w-full px-4 py-3 text-[14px] border border-[var(--color-border)] rounded-xl text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors bg-white resize-none leading-relaxed"
           />
           <button
             onClick={handlePasteSubmit}
-            disabled={!pasteText.trim() || state === 'parsing'}
-            className="flex items-center gap-2 bg-[var(--color-primary)] text-white font-semibold text-[14px] px-5 py-2.5 rounded-[var(--radius-xl)] hover:bg-[var(--color-primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!pasteText.trim()}
+            className="flex items-center gap-2 bg-[var(--color-primary)] text-white font-semibold text-[14px] px-5 py-2.5 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {state === 'parsing' && <Loader2 size={15} className="animate-spin" />}
-            {state === 'parsing' ? 'Building graph…' : 'Build my Candidate Graph'}
+            Build my Candidate Graph
           </button>
         </div>
       )}
