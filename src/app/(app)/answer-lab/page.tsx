@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { FlaskConical, Plus, Search, Copy, Check, Loader2, X } from 'lucide-react'
 import { cn, wordCount } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -81,24 +81,6 @@ const DEMO_QUESTIONS: Question[] = [
   },
 ]
 
-const DEMO_STORIES: Story[] = [
-  {
-    id: 's1',
-    title: 'Onboarding Redesign',
-    summary: 'Led cross-functional redesign reducing time-to-value 40%',
-  },
-  {
-    id: 's2',
-    title: 'API v2 Failure',
-    summary: 'Launched without validation, recovered trust in 6 weeks',
-  },
-  {
-    id: 's3',
-    title: 'Analytics Launch',
-    summary: 'Built analytics module generating £180k incremental ARR',
-  },
-]
-
 const TRANSFORM_MODES: TransformMode[] = [
   'More concise',
   'More strategic',
@@ -112,7 +94,7 @@ const TRANSFORM_MODES: TransformMode[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const TYPE_GROUPS = Array.from(new Set(DEMO_QUESTIONS.map((q) => q.type)))
+// Compute groups dynamically from questions state in the component
 
 const typeVariant: Record<QuestionType, 'primary' | 'warning' | 'strategic' | 'strong' | 'critical'> = {
   stakeholder: 'primary',
@@ -153,6 +135,7 @@ export default function AnswerLabPage() {
   const [transforming, setTransforming] = useState<TransformMode | null>(null)
   const [generating, setGenerating] = useState(false)
   const [selectedStory, setSelectedStory] = useState<Story | null>(null)
+  const [stories, setStories] = useState<Story[]>([])
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -161,12 +144,36 @@ export default function AnswerLabPage() {
   const [questions, setQuestions] = useState<Question[]>(DEMO_QUESTIONS)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Load real stories from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('im:stories')
+      if (stored) {
+        const parsed: Story[] = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setStories(parsed.map((s) => ({ id: s.id, title: s.title, summary: s.summary })))
+          return
+        }
+      }
+    } catch { /* ignore */ }
+    // Fall back to API
+    fetch('/api/ai/stories')
+      .then((r) => r.json())
+      .then((data) => {
+        const s: Story[] = (data.stories ?? [])
+          .filter((s: Story) => !s.id?.startsWith('demo-'))
+          .map((s: Story) => ({ id: s.id, title: s.title, summary: s.summary }))
+        setStories(s)
+      })
+      .catch(() => { /* silent */ })
+  }, [])
+
   // Filter questions by search
   const filteredQuestions = questions.filter((q) =>
     q.text.toLowerCase().includes(search.toLowerCase()),
   )
 
-  const visibleGroups = TYPE_GROUPS.filter((type) =>
+  const visibleGroups = Array.from(new Set(questions.map((q) => q.type))).filter((type) =>
     filteredQuestions.some((q) => q.type === type),
   )
 
@@ -570,54 +577,64 @@ export default function AnswerLabPage() {
                 >
                   Best Story Match
                 </p>
-                <div className="flex flex-col gap-2">
-                  {DEMO_STORIES.slice(0, 2).map((story) => {
-                    const isSelected = selectedStory?.id === story.id
-                    return (
-                      <button
-                        key={story.id}
-                        onClick={() =>
-                          setSelectedStory((prev) =>
-                            prev?.id === story.id ? null : story,
-                          )
-                        }
-                        className="flex items-start gap-3 p-3 rounded-lg text-left transition-all border"
-                        style={{
-                          borderColor: isSelected
-                            ? 'var(--color-primary)'
-                            : 'var(--color-border)',
-                          background: isSelected
-                            ? 'var(--color-primary-light)'
-                            : 'var(--color-background)',
-                          borderRadius: 'var(--radius-md)',
-                        }}
-                      >
-                        <div
-                          className="w-2 h-2 rounded-full shrink-0 mt-1.5"
+                {stories.length === 0 ? (
+                  <p className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
+                    No stories mined yet —{' '}
+                    <a href="/stories" className="underline" style={{ color: 'var(--color-primary)' }}>
+                      mine your stories
+                    </a>{' '}
+                    to use them here.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {stories.slice(0, 3).map((story) => {
+                      const isSelected = selectedStory?.id === story.id
+                      return (
+                        <button
+                          key={story.id}
+                          onClick={() =>
+                            setSelectedStory((prev) =>
+                              prev?.id === story.id ? null : story,
+                            )
+                          }
+                          className="flex items-start gap-3 p-3 rounded-lg text-left transition-all border"
                           style={{
-                            background: isSelected
+                            borderColor: isSelected
                               ? 'var(--color-primary)'
                               : 'var(--color-border)',
+                            background: isSelected
+                              ? 'var(--color-primary-light)'
+                              : 'var(--color-background)',
+                            borderRadius: 'var(--radius-md)',
                           }}
-                        />
-                        <div>
-                          <p
-                            className="text-[13px] font-semibold"
-                            style={{ color: 'var(--color-text-primary)' }}
-                          >
-                            {story.title}
-                          </p>
-                          <p
-                            className="text-[12px] mt-0.5"
-                            style={{ color: 'var(--color-text-secondary)' }}
-                          >
-                            {story.summary}
-                          </p>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
+                        >
+                          <div
+                            className="w-2 h-2 rounded-full shrink-0 mt-1.5"
+                            style={{
+                              background: isSelected
+                                ? 'var(--color-primary)'
+                                : 'var(--color-border)',
+                            }}
+                          />
+                          <div>
+                            <p
+                              className="text-[13px] font-semibold"
+                              style={{ color: 'var(--color-text-primary)' }}
+                            >
+                              {story.title}
+                            </p>
+                            <p
+                              className="text-[12px] mt-0.5"
+                              style={{ color: 'var(--color-text-secondary)' }}
+                            >
+                              {story.summary}
+                            </p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Generate button */}

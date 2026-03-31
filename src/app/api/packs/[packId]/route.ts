@@ -10,8 +10,17 @@ export async function GET(
   const { packId } = await params
   const flags = getDemoFlags()
 
-  if (flags.auth || packId.startsWith('demo-')) {
+  if (packId.startsWith('demo-')) {
     return NextResponse.json({ pack: getDemoPack(packId) })
+  }
+
+  if (packId.startsWith('local-')) {
+    // Client-side only pack — client should load from localStorage
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  if (flags.auth) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
   const supabase = await createClient()

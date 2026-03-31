@@ -499,11 +499,29 @@ export default function StoriesPage() {
   const [selectedStory, setSelectedStory] = useState<Story | null>(null)
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set())
 
+  const [mineError, setMineError] = useState<string | null>(null)
+
   const fetchStories = useCallback(async () => {
     try {
+      // Prefer localStorage (real mined stories) over the API demo fixture
+      try {
+        const stored = localStorage.getItem('im:stories')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setStories(parsed)
+            setLoading(false)
+            return
+          }
+        }
+      } catch { /* ignore */ }
+
       const res = await fetch('/api/ai/stories')
       const data = await res.json()
-      setStories(data.stories ?? [])
+      // Don't show API demo fixtures — only show empty state so user mines real ones
+      const apiStories = data.stories ?? []
+      const isDemo = apiStories.some((s: { id: string }) => s.id?.startsWith('demo-'))
+      setStories(isDemo ? [] : apiStories)
     } catch {
       // ignore — empty state shown
     } finally {
@@ -517,12 +535,31 @@ export default function StoriesPage() {
 
   async function handleMineMore() {
     setMining(true)
+    setMineError(null)
     try {
-      const res = await fetch('/api/ai/stories', { method: 'POST' })
+      // In no-Supabase mode, read graph from localStorage and send to API
+      let body: BodyInit | undefined
+      const stored = localStorage.getItem('im:graph')
+      if (stored) {
+        const { profile, nodes } = JSON.parse(stored)
+        body = JSON.stringify({ profile, nodes })
+      }
+
+      const res = await fetch('/api/ai/stories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      })
       const data = await res.json()
-      setStories(data.stories ?? [])
+      if (!res.ok) {
+        setMineError(data.error ?? 'Failed to mine stories')
+        return
+      }
+      const mined = data.stories ?? []
+      setStories(mined)
+      try { localStorage.setItem('im:stories', JSON.stringify(mined)) } catch { /* ignore */ }
     } catch {
-      // ignore
+      setMineError('Could not connect to server')
     } finally {
       setMining(false)
     }
@@ -620,6 +657,16 @@ export default function StoriesPage() {
         )}
       </div>
 
+      {/* Mine error */}
+      {mineError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          {mineError}
+          {mineError.includes('Upload') && (
+            <a href="/profile" className="ml-2 underline font-medium">Upload CV →</a>
+          )}
+        </div>
+      )}
+
       {/* Content */}
       {loading ? (
         <PageLoading label="Loading your stories…" />
@@ -629,13 +676,13 @@ export default function StoriesPage() {
           title="No stories yet"
           description={
             filter === 'all'
-              ? 'Mine your first stories from your candidate profile to get started.'
+              ? 'Upload your CV and then click Mine Stories to extract your real interview stories.'
               : `No stories tagged with "${filter}". Try a different filter or mine more stories.`
           }
           action={
             filter !== 'all'
               ? undefined
-              : { label: 'Mine stories', href: '#' }
+              : { label: 'Mine stories now', href: '#' }
           }
         />
       ) : view === 'grid' ? (

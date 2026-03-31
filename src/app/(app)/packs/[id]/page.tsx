@@ -382,16 +382,26 @@ export default function PackDetailPage() {
 
   const fetchPack = useCallback(async () => {
     try {
+      // For local packs (no Supabase), load from localStorage
+      if (id?.startsWith('local-')) {
+        try {
+          const stored = localStorage.getItem('im:packs')
+          if (stored) {
+            const packs = JSON.parse(stored)
+            const found = packs.find((p: Pack) => p.id === id)
+            if (found) { setPack(found); setLoading(false); return }
+          }
+        } catch { /* ignore */ }
+        setLoading(false)
+        return
+      }
+
       const res = await fetch(`/api/packs/${id}`)
       if (res.ok) {
         const data = await res.json()
-        setPack(data)
-      } else {
-        setPack(DEMO_PACK)
+        setPack(data.pack ?? data)
       }
-    } catch {
-      setPack(DEMO_PACK)
-    } finally {
+    } catch { /* ignore */ } finally {
       setLoading(false)
     }
   }, [id])

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Loader2, ArrowRight } from 'lucide-react'
 import { Breadcrumbs } from '@/components/layout/breadcrumbs'
@@ -57,35 +57,7 @@ function ProgressDots({ step }: { step: Step }) {
   )
 }
 
-function GeneratingOverlay({ onDone }: { onDone: (id: string) => void }) {
-  const [activeIndex, setActiveIndex] = useState(0)
-  const [doneIndexes, setDoneIndexes] = useState<number[]>([])
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    const advance = (index: number) => {
-      if (index >= GENERATION_STEPS.length) return
-
-      timerRef.current = setTimeout(() => {
-        setDoneIndexes((prev) => [...prev, index])
-        if (index + 1 < GENERATION_STEPS.length) {
-          setActiveIndex(index + 1)
-          advance(index + 1)
-        } else {
-          // All steps done — signal completion
-          timerRef.current = setTimeout(() => onDone('new-pack-id'), 600)
-        }
-      }, 1500)
-    }
-
-    advance(0)
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
+function GeneratingOverlay({ activeIndex, doneIndexes }: { activeIndex: number; doneIndexes: number[] }) {
   return (
     <div className="fixed inset-0 z-50 bg-[var(--color-background)] flex items-center justify-center">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-lg p-10 w-full max-w-md">
@@ -97,7 +69,7 @@ function GeneratingOverlay({ onDone }: { onDone: (id: string) => void }) {
             Building your pack
           </h2>
           <p className="text-[14px] text-[var(--color-text-secondary)] mt-1">
-            This usually takes about 10 seconds.
+            This usually takes about 30 seconds.
           </p>
         </div>
 
@@ -144,13 +116,7 @@ function GeneratingOverlay({ onDone }: { onDone: (id: string) => void }) {
         <div className="mt-8 h-1 rounded-full bg-[var(--color-border)] overflow-hidden">
           <div
             className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-700"
-            style={{
-              width: `${Math.round(
-                ((doneIndexes.length + (activeIndex > doneIndexes.length ? 0 : 0)) /
-                  GENERATION_STEPS.length) *
-                  100,
-              )}%`,
-            }}
+            style={{ width: `${Math.round((doneIndexes.length / GENERATION_STEPS.length) * 100)}%` }}
           />
         </div>
       </div>
@@ -165,6 +131,8 @@ export default function NewPackPage() {
 
   const [step, setStep] = useState<Step>(1)
   const [generating, setGenerating] = useState(false)
+  const [genActiveIndex, setGenActiveIndex] = useState(0)
+  const [genDoneIndexes, setGenDoneIndexes] = useState<number[]>([])
 
   // Step 1 fields
   const [jd, setJd] = useState('')
@@ -185,10 +153,33 @@ export default function NewPackPage() {
     setError(null)
     setIsSubmitting(true)
     setGenerating(true)
-  }
+    setGenActiveIndex(0)
+    setGenDoneIndexes([])
 
-  async function handleGenerationDone(tempId: string) {
+    // Advance animation steps at even intervals while API call runs
+    const stepInterval = 8000 // advance a step every 8s
+    const timers: ReturnType<typeof setTimeout>[] = []
+    GENERATION_STEPS.forEach((_, i) => {
+      if (i === 0) return // step 0 starts immediately as active
+      timers.push(setTimeout(() => {
+        setGenDoneIndexes((prev) => [...prev, i - 1])
+        setGenActiveIndex(i)
+      }, i * stepInterval))
+    })
+
     try {
+      // Read profile/nodes from localStorage to send to API
+      let clientProfile = null
+      let clientNodes = null
+      try {
+        const stored = localStorage.getItem('im:graph')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          clientProfile = parsed.profile ?? null
+          clientNodes = parsed.nodes ?? null
+        }
+      } catch { /* ignore */ }
+
       const res = await fetch('/api/packs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -198,20 +189,46 @@ export default function NewPackPage() {
           company: company.trim() || null,
           role_level: roleLevel,
           interview_type: interviewType,
+          profile: clientProfile,
+          nodes: clientNodes,
         }),
       })
 
-      if (res.ok) {
-        const pack = await res.json()
-        router.push(`/packs/${pack.id}`)
-      } else {
-        // Fall back to demo pack if API not ready
-        router.push(`/packs/demo-pack-1`)
+      // Clear remaining step timers
+      timers.forEach(clearTimeout)
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error ?? `Failed to create pack (${res.status})`)
+        setGenerating(false)
+        setIsSubmitting(false)
+        return
       }
-    } catch {
-      // API not ready — fall back to demo pack
-      router.push(`/packs/demo-pack-1`)
-    } finally {
+
+      const data = await res.json()
+      const pack = data.pack
+
+      // Save mined stories/pressure points to localStorage
+      try {
+        if (data.stories?.length > 0) {
+          localStorage.setItem('im:stories', JSON.stringify(data.stories))
+        }
+        if (data.pressure_points?.length > 0) {
+          localStorage.setItem('im:pressure', JSON.stringify(data.pressure_points))
+        }
+        if (pack) {
+          const existing = JSON.parse(localStorage.getItem('im:packs') ?? '[]')
+          localStorage.setItem('im:packs', JSON.stringify([pack, ...existing]))
+        }
+      } catch { /* ignore */ }
+
+      // Complete animation then navigate
+      setGenDoneIndexes(GENERATION_STEPS.map((_, i) => i))
+      setTimeout(() => router.push(`/packs/${pack.id}`), 600)
+    } catch (err) {
+      timers.forEach(clearTimeout)
+      setError(err instanceof Error ? err.message : 'Failed to create pack')
+      setGenerating(false)
       setIsSubmitting(false)
     }
   }
@@ -223,7 +240,7 @@ export default function NewPackPage() {
 
   return (
     <>
-      {generating && <GeneratingOverlay onDone={handleGenerationDone} />}
+      {generating && <GeneratingOverlay activeIndex={genActiveIndex} doneIndexes={genDoneIndexes} />}
 
       <div className="space-y-6 max-w-xl">
         {/* Breadcrumbs */}

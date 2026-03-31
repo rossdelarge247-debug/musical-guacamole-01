@@ -4,12 +4,21 @@ import { getDemoFlags } from '@/lib/demo/flags'
 import { mineStories } from '@/lib/ai/engines/story'
 
 // POST /api/ai/stories — mine stories from candidate graph
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const flags = getDemoFlags()
 
     if (flags.auth) {
-      return NextResponse.json({ stories: getDemoStories(), demo: true })
+      // No Supabase — caller must supply profile + nodes from localStorage
+      const body = await request.json().catch(() => ({}))
+      const { profile, nodes } = body
+
+      if (!profile || !nodes?.length) {
+        return NextResponse.json({ error: 'No CV data found. Upload your CV first.' }, { status: 400 })
+      }
+
+      const mined = await mineStories(profile, nodes)
+      return NextResponse.json({ stories: mined, demo: false })
     }
 
     const supabase = await createClient()
@@ -22,7 +31,7 @@ export async function POST() {
       .eq('user_id', user.id)
       .single()
 
-    if (!profile) return NextResponse.json({ error: 'No profile found' }, { status: 404 })
+    if (!profile) return NextResponse.json({ error: 'No profile found. Upload your CV first.' }, { status: 404 })
 
     const { data: nodes } = await supabase
       .from('candidate_graph_nodes')
@@ -31,7 +40,6 @@ export async function POST() {
 
     const mined = await mineStories(profile, nodes ?? [])
 
-    // Save to DB
     const { data: saved } = await supabase
       .from('stories')
       .insert(mined.map((s) => ({ ...s, profile_id: profile.id })))

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   ShieldAlert,
@@ -13,90 +13,13 @@ import {
   Dumbbell,
   Eye,
   ArrowRight,
-  AlertTriangle,
   Info,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { PageLoading } from '@/components/ui/loading-spinner'
 import type { PressurePoint, PressurePointSeverity } from '@/types'
-
-// ---------------------------------------------------------------------------
-// Demo data
-// ---------------------------------------------------------------------------
-
-const DEMO_PRESSURE_POINTS: Omit<PressurePoint, 'profile_id' | 'created_at' | 'updated_at'>[] = [
-  {
-    id: 'pp-1',
-    type: 'short_tenure',
-    title: 'Short tenure at StartupCo (20 months)',
-    severity: 'medium',
-    interviewer_concern: 'Pattern of leaving before things get hard, or was asked to leave?',
-    defense_line:
-      'I joined to solve a specific problem — once delivered, I moved to where I could have more impact.',
-    recommended_framing:
-      'Lead with what was accomplished. Be specific about the outcome that signalled completion. Show it was a planned move, not a reactive one.',
-    proof_points: [
-      'Shipped analytics module — the original remit — in month 14',
-      'Handed over to a senior hire I helped recruit',
-      'Left with a reference from the CEO',
-    ],
-    bad_responses_to_avoid: [
-      'Blaming the company or leadership',
-      'Vague answers about "culture fit"',
-      'Over-explaining or becoming defensive',
-    ],
-    drills: [
-      {
-        question: 'Why did you leave after only 20 months?',
-        recommended_approach:
-          'Lead with the accomplishment, explain the natural completion, show proactive transition.',
-      },
-      {
-        question: 'Were you asked to leave?',
-        recommended_approach:
-          'Direct no, followed by the reference and the planned transition narrative.',
-      },
-    ],
-    interviewer_lenses: ['Risk-averse line manager', 'Startup founder assessing commitment'],
-  },
-  {
-    id: 'pp-2',
-    type: 'limited_leadership',
-    title: 'Limited direct management experience',
-    severity: 'high',
-    interviewer_concern: 'Can this person manage and develop a team at senior level?',
-    defense_line:
-      'I have led through influence and cross-functional leadership consistently — direct line management is the next step I am actively pursuing.',
-    recommended_framing:
-      'Reframe leadership as influence, direction-setting, and team-shaping. Cite specific examples where you led without formal authority. Show self-awareness about the gap and a clear plan.',
-    proof_points: [
-      'Led a team of 5 engineers on the onboarding redesign without being their line manager',
-      'Mentored two junior PMs informally — one promoted within 8 months',
-      'Ran quarterly planning for a cross-functional group of 12',
-    ],
-    bad_responses_to_avoid: [
-      'Downplaying the gap',
-      'Claiming management experience you do not have',
-      'Being vague about what leadership means to you',
-    ],
-    drills: [
-      {
-        question: 'Have you ever managed a team directly?',
-        recommended_approach:
-          'Honest answer, pivot to cross-functional leadership evidence, show self-awareness and ambition.',
-      },
-      {
-        question: 'How would you handle a direct report who is underperforming?',
-        recommended_approach:
-          'Use a specific coaching framework. Show you have thought about this even without direct experience.',
-      },
-    ],
-    interviewer_lenses: [
-      'Senior hiring manager expecting people management',
-      'HR assessing leadership pipeline',
-    ],
-  },
-]
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -180,7 +103,7 @@ function PressureCard({
   readiness,
   onReadinessChange,
 }: {
-  point: (typeof DEMO_PRESSURE_POINTS)[number]
+  point: PressurePoint
   expanded: boolean
   onToggle: () => void
   readiness: ReadinessLevel
@@ -348,6 +271,10 @@ function PressureCard({
 // ---------------------------------------------------------------------------
 
 export default function PressurePage() {
+  const [points, setPoints] = useState<PressurePoint[]>([])
+  const [loading, setLoading] = useState(true)
+  const [detecting, setDetecting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [readiness, setReadiness] = useState<Record<string, ReadinessLevel>>({})
 
@@ -359,8 +286,69 @@ export default function PressurePage() {
     setReadiness((prev) => ({ ...prev, [id]: value }))
   }
 
+  // Load saved pressure points on mount
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        // Check localStorage first
+        try {
+          const stored = localStorage.getItem('im:pressure')
+          if (stored) {
+            const parsed = JSON.parse(stored)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              if (!cancelled) { setPoints(parsed); setLoading(false) }
+              return
+            }
+          }
+        } catch { /* ignore */ }
+
+        // Fall back to API (Supabase session)
+        const res = await fetch('/api/pressure')
+        if (!res.ok) throw new Error(`Failed to load (${res.status})`)
+        const data = await res.json()
+        if (!cancelled) setPoints(data.points ?? [])
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Something went wrong')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // Run detection
+  const handleDetect = useCallback(async () => {
+    setDetecting(true)
+    setError(null)
+    try {
+      let body: BodyInit | undefined
+      try {
+        const stored = localStorage.getItem('im:graph')
+        if (stored) {
+          const { profile, nodes } = JSON.parse(stored)
+          body = JSON.stringify({ profile, nodes })
+        }
+      } catch { /* ignore */ }
+
+      const res = await fetch('/api/pressure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? 'Detection failed'); return }
+      setPoints(data.points ?? [])
+      try { localStorage.setItem('im:pressure', JSON.stringify(data.points ?? [])) } catch { /* ignore */ }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Detection failed')
+    } finally {
+      setDetecting(false)
+    }
+  }, [])
+
   const readyCount = Object.values(readiness).filter((v) => v === 'confident').length
-  const total = DEMO_PRESSURE_POINTS.length
+  const total = points.length
 
   return (
     <div className="space-y-6">
@@ -375,68 +363,101 @@ export default function PressurePage() {
           </p>
         </div>
 
-        {/* Readiness summary */}
-        <div className="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] px-4 py-2.5 shrink-0">
-          <ShieldAlert size={15} className="text-[var(--color-primary)]" />
-          <span className="text-[13px] text-[var(--color-text-secondary)]">
-            <strong className="text-[var(--color-text-primary)]">{readyCount}</strong> of{' '}
-            <strong className="text-[var(--color-text-primary)]">{total}</strong> confident
-          </span>
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Readiness summary */}
+          {total > 0 && (
+            <div className="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] px-4 py-2.5">
+              <ShieldAlert size={15} className="text-[var(--color-primary)]" />
+              <span className="text-[13px] text-[var(--color-text-secondary)]">
+                <strong className="text-[var(--color-text-primary)]">{readyCount}</strong> of{' '}
+                <strong className="text-[var(--color-text-primary)]">{total}</strong> confident
+              </span>
+            </div>
+          )}
+
+          {/* Re-analyse button */}
+          {total > 0 && (
+            <button
+              onClick={handleDetect}
+              disabled={detecting}
+              className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-text-muted)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 px-3 py-2 rounded-[var(--radius-md)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw size={13} className={detecting ? 'animate-spin' : ''} />
+              {detecting ? 'Analysing…' : 'Re-analyse'}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Demo mode notice */}
-      <div className="flex items-start gap-3 bg-[#FFFBEB] border border-[#FCD34D] rounded-[var(--radius-md)] px-4 py-3">
-        <AlertTriangle size={15} className="shrink-0 mt-0.5 text-[#D97706]" />
-        <div>
-          <p className="text-[13px] font-semibold text-[#92400E]">Demo mode</p>
-          <p className="text-[13px] text-[#78350F]">
-            These pressure points were detected from your profile.{' '}
-            <Link href="/profile" className="font-semibold underline hover:no-underline">
-              Add your CV
-            </Link>{' '}
-            to generate personalised pressure points.
+      {/* Error banner */}
+      {error && (
+        <div className="rounded-[var(--radius-md)] border border-[#FCA5A5] bg-[#FEE2E2] px-4 py-3 text-[14px] text-[#991B1B]">
+          {error}
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && <PageLoading label="Loading pressure points…" />}
+
+      {/* Info callout — only shown when points exist */}
+      {!loading && total > 0 && (
+        <div className="flex items-start gap-3 bg-[var(--color-primary-light)] border border-[var(--color-primary)]/20 rounded-[var(--radius-md)] px-4 py-3">
+          <Info size={15} className="shrink-0 mt-0.5 text-[var(--color-primary)]" />
+          <p className="text-[13px] text-[var(--color-primary)]">
+            Click any pressure point to expand it, review your defense strategy, and mark your readiness. Practice the drills in a mock interview to build confidence.
           </p>
         </div>
-      </div>
-
-      {/* Info callout */}
-      <div className="flex items-start gap-3 bg-[var(--color-primary-light)] border border-[var(--color-primary)]/20 rounded-[var(--radius-md)] px-4 py-3">
-        <Info size={15} className="shrink-0 mt-0.5 text-[var(--color-primary)]" />
-        <p className="text-[13px] text-[var(--color-primary)]">
-          Click any pressure point to expand it, review your defense strategy, and mark your readiness. Practice the drills in a mock interview to build confidence.
-        </p>
-      </div>
+      )}
 
       {/* Pressure point cards */}
-      <div className="space-y-3">
-        {DEMO_PRESSURE_POINTS.map((point) => (
-          <PressureCard
-            key={point.id}
-            point={point}
-            expanded={expandedId === point.id}
-            onToggle={() => toggleExpand(point.id)}
-            readiness={readiness[point.id] ?? 'not_practiced'}
-            onReadinessChange={(v) => setReadinessFor(point.id, v)}
-          />
-        ))}
-      </div>
+      {!loading && total > 0 && (
+        <div className="space-y-3">
+          {points.map((point) => (
+            <PressureCard
+              key={point.id}
+              point={point}
+              expanded={expandedId === point.id}
+              onToggle={() => toggleExpand(point.id)}
+              readiness={readiness[point.id] ?? 'not_practiced'}
+              onReadinessChange={(v) => setReadinessFor(point.id, v)}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Empty state if no points */}
-      {DEMO_PRESSURE_POINTS.length === 0 && (
+      {/* Empty state */}
+      {!loading && total === 0 && (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-12 text-center">
           <ShieldAlert size={32} className="mx-auto text-[var(--color-text-muted)] mb-3" />
-          <p className="text-[15px] font-semibold text-[var(--color-text-primary)]">No pressure points detected</p>
-          <p className="text-[14px] text-[var(--color-text-secondary)] mt-1">
-            Upload your CV to let us identify your background&apos;s potential weak spots.
+          <p className="text-[15px] font-semibold text-[var(--color-text-primary)]">No pressure points yet</p>
+          <p className="text-[14px] text-[var(--color-text-secondary)] mt-1 mb-6 max-w-sm mx-auto">
+            Analyse your profile to identify the questions you&apos;ll need to prepare for most carefully.
           </p>
-          <Link
-            href="/profile"
-            className="mt-4 inline-flex items-center gap-2 bg-[var(--color-primary)] text-white text-[13px] font-semibold px-5 py-2.5 rounded-[var(--radius-xl)] hover:bg-[var(--color-primary-dark)] transition-colors"
+          <button
+            onClick={handleDetect}
+            disabled={detecting}
+            className="inline-flex items-center gap-2 bg-[var(--color-primary)] text-white text-[13px] font-semibold px-5 py-2.5 rounded-[var(--radius-xl)] hover:bg-[var(--color-primary-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Upload CV
-            <ArrowRight size={13} />
-          </Link>
+            {detecting ? (
+              <>
+                <RefreshCw size={13} className="animate-spin" />
+                Analysing your profile…
+              </>
+            ) : (
+              <>
+                Analyse My Profile
+                <ArrowRight size={13} />
+              </>
+            )}
+          </button>
+          {!detecting && (
+            <p className="mt-3 text-[12px] text-[var(--color-text-muted)]">
+              No CV yet?{' '}
+              <Link href="/profile" className="underline hover:no-underline">
+                Upload your CV first
+              </Link>
+            </p>
+          )}
         </div>
       )}
     </div>

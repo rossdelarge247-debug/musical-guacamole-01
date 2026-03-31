@@ -9,7 +9,8 @@ import type { Story, PressurePoint, CandidateProfile, CandidateGraphNode } from 
 // POST /api/packs — create a new Interview Pack from a JD
 export async function POST(request: Request) {
   try {
-    const { jd_raw, title, company, role_level, interview_type } = await request.json()
+    const body = await request.json()
+    const { jd_raw, title, company, role_level, interview_type, profile: clientProfile, nodes: clientNodes } = body
 
     if (!jd_raw?.trim()) {
       return NextResponse.json({ error: 'Job description is required' }, { status: 400 })
@@ -26,9 +27,9 @@ export async function POST(request: Request) {
     let supabase: Awaited<ReturnType<typeof createClient>> | null = null
 
     if (flags.auth) {
-      // Demo mode — use fixture data
-      profile = getDemoProfile()
-      nodes = getDemoNodes()
+      // No Supabase — use caller-supplied profile/nodes from localStorage
+      profile = clientProfile ?? getDemoProfile()
+      nodes = clientNodes ?? getDemoNodes()
       stories = [] as Story[]
       pressurePoints = [] as PressurePoint[]
     } else {
@@ -73,10 +74,10 @@ export async function POST(request: Request) {
     ])
 
     if (flags.auth) {
-      // Demo mode — return without DB writes
+      // No Supabase — return in-memory pack (real AI analysis, no DB persistence)
       return NextResponse.json({
         pack: {
-          id: `demo-pack-${Date.now()}`,
+          id: `local-pack-${Date.now()}`,
           user_id: userId,
           title: title || `${company || 'Role'} — Interview Pack`,
           company: company || null,
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
         },
         stories: minedStories,
         pressure_points: detectedPressure,
-        demo: true,
+        demo: false,
       })
     }
 
