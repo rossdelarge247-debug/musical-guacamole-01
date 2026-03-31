@@ -46,9 +46,11 @@ export async function middleware(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith('/auth'),
   )
   const isLivePath = pathname.startsWith('/live/')
+  const isApiRoute = pathname.startsWith('/api/')
 
-  // Unauthenticated → redirect to login (except public + live paths)
-  if (!user && !isPublicPath && !isLivePath) {
+  // Unauthenticated → redirect to login (except public, live, and API paths)
+  // API routes handle their own auth — middleware must not redirect them
+  if (!user && !isPublicPath && !isLivePath && !isApiRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('redirect', pathname)

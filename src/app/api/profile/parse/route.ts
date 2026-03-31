@@ -100,6 +100,18 @@ export async function POST(request: Request) {
   // Run processing async so we can return the stream immediately
   ;(async () => {
     try {
+      // ── Debug: emit env var status as first event ──
+      await writer.write(
+        encodeEvent({
+          type: 'debug',
+          ai_demo: flags.ai,
+          auth_demo: flags.auth,
+          anthropic_key: process.env.ANTHROPIC_API_KEY
+            ? `set (${process.env.ANTHROPIC_API_KEY.length} chars)`
+            : 'NOT SET',
+        }),
+      )
+
       // ── Extract text ──
       await writer.write(
         encodeEvent({ type: 'status', message: 'Reading your document…' }),
