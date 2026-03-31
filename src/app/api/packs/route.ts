@@ -4,6 +4,7 @@ import { getDemoFlags } from '@/lib/demo/flags'
 import { analyseJD } from '@/lib/ai/engines/jd'
 import { mineStories } from '@/lib/ai/engines/story'
 import { detectPressurePoints } from '@/lib/ai/engines/pressure'
+import { researchOrg } from '@/lib/ai/engines/org'
 import type { Story, PressurePoint, CandidateProfile, CandidateGraphNode } from '@/types'
 
 // POST /api/packs — create a new Interview Pack from a JD
@@ -67,10 +68,11 @@ export async function POST(request: Request) {
     }
 
     // Run AI engines in parallel
-    const [jdAnalysis, minedStories, detectedPressure] = await Promise.all([
-      analyseJD(jd_raw, profile, stories, pressurePoints),
+    const [jdAnalysis, minedStories, detectedPressure, orgIntel] = await Promise.all([
+      analyseJD(jd_raw, profile, stories, pressurePoints, nodes),
       stories.length === 0 ? mineStories(profile, nodes) : Promise.resolve([]),
       pressurePoints.length === 0 ? detectPressurePoints(profile, nodes) : Promise.resolve([]),
+      researchOrg(jd_raw, company ?? null),
     ])
 
     if (flags.auth) {
@@ -85,6 +87,7 @@ export async function POST(request: Request) {
           role_level: role_level || 'mid',
           interview_type: interview_type || 'mixed',
           ...jdAnalysis,
+          org_intel: orgIntel,
           mapped_story_ids: [],
           pressure_point_ids: [],
           proof_point_ledger: [],
@@ -134,6 +137,13 @@ export async function POST(request: Request) {
         vocabulary: jdAnalysis.vocabulary,
         answer_priorities: jdAnalysis.hidden_success_criteria,
         opening_pitch: jdAnalysis.opening_pitch,
+        match_score: jdAnalysis.match_score,
+        match_rationale: jdAnalysis.match_rationale,
+        overlap_areas: jdAnalysis.overlap_areas,
+        gap_areas: jdAnalysis.gap_areas,
+        gap_filling_tips: jdAnalysis.gap_filling_tips,
+        experience_card_prompts: jdAnalysis.experience_card_prompts,
+        org_intel: orgIntel,
         mapped_story_ids: storyIds,
         pressure_point_ids: ppIds,
         proof_point_ledger: [],
