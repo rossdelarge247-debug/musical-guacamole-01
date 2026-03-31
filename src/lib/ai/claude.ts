@@ -10,6 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { getDemoFlags } from '@/lib/demo/flags'
+import { env } from '@/lib/env'
 
 export const CLAUDE_SONNET = 'claude-sonnet-4-6'
 export const CLAUDE_OPUS = 'claude-opus-4-6'
@@ -21,13 +22,10 @@ const OPUS_TASKS = new Set([
   'jd_deep_analysis',
 ])
 
-let _client: Anthropic | null = null
-
 function getClient(): Anthropic {
-  if (!_client) {
-    _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  }
-  return _client
+  const apiKey = env.ANTHROPIC_API_KEY()
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set')
+  return new Anthropic({ apiKey })
 }
 
 export function modelForTask(task: string): string {

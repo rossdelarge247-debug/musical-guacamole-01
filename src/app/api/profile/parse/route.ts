@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getDemoFlags } from '@/lib/demo/flags'
+import { env, keyStatus } from '@/lib/env'
 import Anthropic from '@anthropic-ai/sdk'
 import type { GraphNodeType } from '@/types'
 
@@ -101,15 +102,12 @@ export async function POST(request: Request) {
   ;(async () => {
     try {
       // ── Debug: emit env var status as first event ──
-      const rawKey = process.env['ANTHROPIC_API_KEY']
       await writer.write(
         encodeEvent({
           type: 'debug',
           ai_demo: flags.ai,
           auth_demo: flags.auth,
-          anthropic_key: rawKey
-            ? `set (${rawKey.length} chars)`
-            : 'NOT SET',
+          anthropic_key: keyStatus(env.ANTHROPIC_API_KEY),
         }),
       )
 
@@ -201,7 +199,7 @@ export async function POST(request: Request) {
         encodeEvent({ type: 'status', message: 'Claude is reading your CV…' }),
       )
 
-      const client = new Anthropic({ apiKey: process.env['ANTHROPIC_API_KEY'] })
+      const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY() })
       let fullResponse = ''
 
       try {
