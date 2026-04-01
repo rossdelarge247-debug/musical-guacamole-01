@@ -31,7 +31,7 @@ export function OrgIntelCard({ intel }: { intel: OrgIntelligence }) {
           What they care about
         </p>
         <ul className="space-y-1.5">
-          {intel.what_they_care_about.map((item, i) => (
+          {(intel.what_they_care_about ?? []).map((item, i) => (
             <li key={i} className="flex items-start gap-2 text-[13px] text-[var(--color-text-secondary)]">
               <span className="w-1 h-1 rounded-full bg-[var(--color-primary)] shrink-0 mt-[6px]" />
               {item}
@@ -46,21 +46,21 @@ export function OrgIntelCard({ intel }: { intel: OrgIntelligence }) {
           Culture signals
         </p>
         <div className="flex flex-wrap gap-1.5">
-          {intel.culture_signals.map((sig, i) => (
+          {(intel.culture_signals ?? []).map((sig, i) => (
             <Badge key={i} variant="strategic">{sig}</Badge>
           ))}
         </div>
       </div>
 
       {/* Red flags */}
-      {intel.red_flags.length > 0 && (
+      {(intel.red_flags ?? []).length > 0 && (
         <div>
           <p className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2 flex items-center gap-1">
             <AlertTriangle size={11} className="text-[var(--color-signal-warning)]" />
             Watch out for
           </p>
           <ul className="space-y-1.5">
-            {intel.red_flags.map((flag, i) => (
+            {(intel.red_flags ?? []).map((flag, i) => (
               <li key={i} className="flex items-start gap-2 text-[13px] text-[#92400E]">
                 <span className="w-1 h-1 rounded-full bg-[#F59E0B] shrink-0 mt-[6px]" />
                 {flag}

@@ -532,7 +532,20 @@ export default function PackDetailPage() {
   }, [fetchPack])
 
   if (loading) return <PageLoading label="Loading pack…" />
-  if (!pack) return null
+  if (!pack) return (
+    <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+      <p className="text-[16px] font-semibold text-[var(--color-text-primary)]">Pack not found</p>
+      <p className="text-[14px] text-[var(--color-text-muted)]">
+        This pack may have been created before the latest update. Try creating a new one.
+      </p>
+      <a
+        href="/packs"
+        className="text-[14px] font-semibold text-[var(--color-primary)] hover:underline"
+      >
+        ← Back to Interview Packs
+      </a>
+    </div>
+  )
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },

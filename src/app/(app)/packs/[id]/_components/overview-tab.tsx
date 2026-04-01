@@ -59,7 +59,7 @@ export function OverviewTab({ overlapAreas, gapAreas, gapFillingTips, orgIntel }
             Key intel
           </p>
           <div className="space-y-2">
-            {orgIntel.key_intel.map((item, i) => (
+            {(orgIntel.key_intel ?? []).map((item, i) => (
               <div
                 key={i}
                 className="flex items-start gap-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-3"
