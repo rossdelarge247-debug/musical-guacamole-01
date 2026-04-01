@@ -13,10 +13,11 @@ export async function POST(request: Request) {
     const res = await fetch(url, {
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (compatible; InterviewMonkey/1.0; +https://interviewmonkey.io)',
-        Accept: 'text/html,application/xhtml+xml,*/*',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,*/*;q=0.9',
+        'Accept-Language': 'en-GB,en;q=0.9',
       },
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(20000),
     })
 
     if (!res.ok) {
@@ -50,10 +51,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ text, title: pageTitle, url })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json(
-      { error: `Could not fetch the URL: ${msg}` },
-      { status: 502 },
-    )
+    const isTimeout =
+      err instanceof Error &&
+      (err.name === 'TimeoutError' || err.name === 'AbortError' || err.message.includes('timeout'))
+    const error = isTimeout
+      ? 'That site took too long to respond (or blocks automated access). Copy the job description text and paste it directly instead.'
+      : `Could not fetch the URL — try copying and pasting the text directly.`
+    return NextResponse.json({ error, canPaste: true }, { status: 502 })
   }
 }

@@ -117,6 +117,8 @@ export default function NewPackPage() {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [canPaste, setCanPaste] = useState(false)
+
   const [generating, setGenerating] = useState(false)
   const [genActiveIndex, setGenActiveIndex] = useState(0)
   const [genDoneIndexes, setGenDoneIndexes] = useState<number[]>([])
@@ -124,9 +126,18 @@ export default function NewPackPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Detect URL as user types
+  function switchToPaste() {
+    setInputMode('text')
+    setInput('')
+    setFetchState('idle')
+    setError(null)
+    setCanPaste(false)
+  }
+
   function handleInputChange(value: string) {
     setInput(value)
     setError(null)
+    setCanPaste(false)
     setFetchState('idle')
     setResolvedJd('')
 
@@ -155,6 +166,7 @@ export default function NewPackPage() {
       if (!res.ok) {
         setFetchState('error')
         setError(data.error ?? 'Could not fetch that URL')
+        setCanPaste(data.canPaste ?? false)
         return
       }
       setFetchState('done')
@@ -465,9 +477,19 @@ export default function NewPackPage() {
 
         {/* Error */}
         {error && (
-          <div className="flex items-start gap-2 text-[13px] text-[var(--color-signal-critical)] rounded-[var(--radius-md)] border px-4 py-3" style={{ borderColor: '#FECACA', background: '#FEF2F2' }}>
-            <AlertCircle size={15} className="shrink-0 mt-0.5" />
-            <span>{error}</span>
+          <div className="rounded-[var(--radius-md)] border px-4 py-3" style={{ borderColor: '#FECACA', background: '#FEF2F2' }}>
+            <div className="flex items-start gap-2 text-[13px] text-[var(--color-signal-critical)]">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+            {canPaste && (
+              <button
+                onClick={switchToPaste}
+                className="mt-2 ml-[23px] text-[13px] font-semibold text-[var(--color-primary)] hover:underline"
+              >
+                Paste the text instead →
+              </button>
+            )}
           </div>
         )}
 
