@@ -539,7 +539,6 @@ export default function PackDetailPage() {
     setDeleting(true)
     try {
       await fetch(`/api/packs/${id}`, { method: 'DELETE' })
-      // Remove from localStorage regardless of pack type
       try {
         const stored = localStorage.getItem('im:packs')
         if (stored) {
@@ -547,7 +546,8 @@ export default function PackDetailPage() {
           localStorage.setItem('im:packs', JSON.stringify(filtered))
         }
       } catch { /* ignore */ }
-      router.push('/packs')
+      // If pack was not found (stale entry), go to /new so they can retry immediately
+      router.push(pack ? '/packs' : '/packs/new')
     } catch { /* ignore */ } finally {
       setDeleting(false)
     }
@@ -555,34 +555,37 @@ export default function PackDetailPage() {
 
   if (loading) return <PageLoading label="Loading pack…" />
   if (!pack) return (
-    <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-      <p className="text-[16px] font-semibold text-[var(--color-text-primary)]">Pack not found</p>
-      <p className="text-[14px] text-[var(--color-text-muted)]">
-        This pack may have been created before the latest update. Try creating a new one.
+    <div className="flex flex-col items-center justify-center py-24 gap-3 text-center max-w-sm mx-auto">
+      <p className="text-[16px] font-semibold text-[var(--color-text-primary)]">This pack no longer exists</p>
+      <p className="text-[14px] text-[var(--color-text-muted)] leading-relaxed">
+        It was likely deleted. Remove it from your list and create a fresh one for the same role.
       </p>
-      <a href="/packs" className="text-[14px] font-semibold text-[var(--color-primary)] hover:underline">
+      <a href="/packs/new" className="mt-1 text-[14px] font-semibold text-[var(--color-primary)] hover:underline">
+        Create a new pack →
+      </a>
+      <a href="/packs" className="text-[13px] text-[var(--color-text-muted)] hover:underline">
         ← Back to Interview Packs
       </a>
       {confirmDelete ? (
-        <div className="flex items-center gap-3 mt-2">
-          <span className="text-[13px] text-[var(--color-text-muted)]">Remove this entry?</span>
+        <div className="flex items-center gap-3 mt-1">
+          <span className="text-[12px] text-[var(--color-text-muted)]">Remove this entry?</span>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-[13px] font-semibold text-[var(--color-signal-critical)] hover:underline disabled:opacity-50"
+            className="text-[12px] font-semibold text-[var(--color-signal-critical)] hover:underline disabled:opacity-50"
           >
             {deleting ? 'Removing…' : 'Yes, remove'}
           </button>
-          <button onClick={() => setConfirmDelete(false)} className="text-[13px] text-[var(--color-text-muted)] hover:underline">
+          <button onClick={() => setConfirmDelete(false)} className="text-[12px] text-[var(--color-text-muted)] hover:underline">
             Cancel
           </button>
         </div>
       ) : (
         <button
           onClick={() => setConfirmDelete(true)}
-          className="flex items-center gap-1.5 text-[13px] text-[var(--color-text-muted)] hover:text-[var(--color-signal-critical)] transition-colors mt-2"
+          className="flex items-center gap-1.5 text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-signal-critical)] transition-colors"
         >
-          <Trash2 size={13} />
+          <Trash2 size={12} />
           Remove from list
         </button>
       )}

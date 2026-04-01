@@ -519,21 +519,24 @@ export default function NewPackPage() {
         {/* Duplicate pack warning */}
         {duplicate && (
           <div className="rounded-[var(--radius-md)] border px-4 py-3" style={{ borderColor: '#C4B5FD', background: '#EDE9FE' }}>
-            <p className="text-[13px] font-semibold text-[#5B21B6] mb-1">
-              You already have a pack for &ldquo;{duplicate.title}&rdquo;
+            <p className="text-[13px] font-semibold text-[#5B21B6] mb-0.5">
+              You may already have a pack for this role.
+            </p>
+            <p className="text-[12px] text-[#7C3AED] mb-2">
+              &ldquo;{duplicate.title}&rdquo; — if you deleted it, just create a new one below.
             </p>
             <div className="flex items-center gap-3">
               <a
                 href={`/packs/${duplicate.id}`}
-                className="text-[13px] font-semibold text-[#5B21B6] hover:underline"
+                className="text-[12px] font-semibold text-[#5B21B6] hover:underline"
               >
                 View existing pack →
               </a>
               <button
-                onClick={() => { setDuplicate(null) }}
-                className="text-[13px] text-[#7C3AED] hover:underline"
+                onClick={() => setDuplicate(null)}
+                className="text-[12px] text-[#7C3AED] hover:underline"
               >
-                Create a new one anyway
+                Create a new one
               </button>
             </div>
           </div>
