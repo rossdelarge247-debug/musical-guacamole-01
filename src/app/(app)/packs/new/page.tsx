@@ -105,6 +105,31 @@ function looksLikeUrl(s: string): boolean {
 type InputMode = 'idle' | 'url' | 'file' | 'text'
 type FetchState = 'idle' | 'fetching' | 'done' | 'error'
 
+interface PackSummary { id: string; title: string }
+
+function findDuplicateByTitle(title: string): PackSummary | null {
+  if (!title) return null
+  try {
+    const stored = localStorage.getItem('im:packs')
+    if (!stored) return null
+    const packs: PackSummary[] = JSON.parse(stored)
+    const norm = (s: string) => s.toLowerCase().trim()
+    return packs.find((p) => norm(p.title) === norm(title)) ?? null
+  } catch { return null }
+}
+
+function findDuplicateByJd(jdText: string): PackSummary | null {
+  if (!jdText) return null
+  try {
+    const stored = localStorage.getItem('im:packs')
+    if (!stored) return null
+    const packs = JSON.parse(stored)
+    const sample = jdText.slice(0, 300)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return packs.find((p: any) => p.jd_raw?.slice(0, 300) === sample) ?? null
+  } catch { return null }
+}
+
 export default function NewPackPage() {
   const router = useRouter()
 
@@ -118,6 +143,7 @@ export default function NewPackPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [canPaste, setCanPaste] = useState(false)
+  const [duplicate, setDuplicate] = useState<PackSummary | null>(null)
 
   const [generating, setGenerating] = useState(false)
   const [genActiveIndex, setGenActiveIndex] = useState(0)
@@ -138,6 +164,7 @@ export default function NewPackPage() {
     setInput(value)
     setError(null)
     setCanPaste(false)
+    setDuplicate(null)
     setFetchState('idle')
     setResolvedJd('')
 
@@ -146,6 +173,7 @@ export default function NewPackPage() {
     } else if (value.trim().length > 0) {
       setInputMode('text')
       setResolvedJd(value)
+      setDuplicate(findDuplicateByJd(value))
     } else {
       setInputMode('idle')
     }
@@ -172,6 +200,7 @@ export default function NewPackPage() {
       setFetchState('done')
       setFetchedTitle(data.title ?? '')
       setResolvedJd(data.text ?? '')
+      setDuplicate(findDuplicateByTitle(data.title ?? ''))
     } catch {
       setFetchState('error')
       setError('Network error — check your connection and try again')
@@ -231,7 +260,14 @@ export default function NewPackPage() {
     const jdText = inputMode === 'text' ? input.trim() : resolvedJd
     if (!jdText || jdText.length < 50) return
 
+    // Final duplicate check (catches file/text modes not caught earlier)
+    if (!duplicate) {
+      const dup = findDuplicateByJd(jdText)
+      if (dup) { setDuplicate(dup); return }
+    }
+
     setError(null)
+    setDuplicate(null)
     setGenerating(true)
     setGenActiveIndex(0)
     setGenDoneIndexes([])
@@ -308,6 +344,11 @@ export default function NewPackPage() {
       } catch { /* ignore */ }
 
       setGenDoneIndexes(GENERATION_STEPS.map((_, i) => i))
+      if (!pack?.id) {
+        setError('Pack was created but could not be loaded — please try again.')
+        setGenerating(false)
+        return
+      }
       setTimeout(() => router.push(`/packs/${pack.id}`), 600)
     } catch (err) {
       timers.forEach(clearTimeout)
@@ -474,6 +515,29 @@ export default function NewPackPage() {
             </span>
           </div>
         </div>
+
+        {/* Duplicate pack warning */}
+        {duplicate && (
+          <div className="rounded-[var(--radius-md)] border px-4 py-3" style={{ borderColor: '#C4B5FD', background: '#EDE9FE' }}>
+            <p className="text-[13px] font-semibold text-[#5B21B6] mb-1">
+              You already have a pack for &ldquo;{duplicate.title}&rdquo;
+            </p>
+            <div className="flex items-center gap-3">
+              <a
+                href={`/packs/${duplicate.id}`}
+                className="text-[13px] font-semibold text-[#5B21B6] hover:underline"
+              >
+                View existing pack →
+              </a>
+              <button
+                onClick={() => { setDuplicate(null) }}
+                className="text-[13px] text-[#7C3AED] hover:underline"
+              >
+                Create a new one anyway
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
