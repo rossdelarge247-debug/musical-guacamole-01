@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Plus, BriefcaseBusiness, ArrowRight } from 'lucide-react'
+import { Plus, BriefcaseBusiness, ArrowRight, Trash2 } from 'lucide-react'
 import { Breadcrumbs } from '@/components/layout/breadcrumbs'
 import { Badge } from '@/components/ui/badge'
 
@@ -15,9 +15,20 @@ interface PackSummary {
   created_at: string
 }
 
+function removeFromLocalStorage(packId: string) {
+  try {
+    const stored = localStorage.getItem('im:packs')
+    if (!stored) return
+    const filtered = (JSON.parse(stored) as PackSummary[]).filter((p) => p.id !== packId)
+    localStorage.setItem('im:packs', JSON.stringify(filtered))
+  } catch { /* ignore */ }
+}
+
 export default function PacksPage() {
   const [packs, setPacks] = useState<PackSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -45,6 +56,18 @@ export default function PacksPage() {
       setPacks(localPacks)
     })().finally(() => setLoading(false))
   }, [])
+
+  async function handleDelete(packId: string) {
+    setDeleting(true)
+    try {
+      await fetch(`/api/packs/${packId}`, { method: 'DELETE' })
+      removeFromLocalStorage(packId)
+      setPacks((prev) => prev.filter((p) => p.id !== packId))
+    } catch { /* ignore */ } finally {
+      setDeleting(false)
+      setConfirmDeleteId(null)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -74,28 +97,59 @@ export default function PacksPage() {
       {!loading && packs.length > 0 && (
         <div className="grid sm:grid-cols-2 gap-4">
           {packs.map((pack) => (
-            <Link
+            <div
               key={pack.id}
-              href={`/packs/${pack.id}`}
-              className="block bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 hover:border-[var(--color-primary)]/40 hover:shadow-sm transition-all group"
+              className="relative bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 hover:border-[var(--color-primary)]/40 hover:shadow-sm transition-all group"
             >
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <h2 className="text-[15px] font-semibold text-[var(--color-text-primary)] leading-snug group-hover:text-[var(--color-primary)] transition-colors">
-                  {pack.title}
-                </h2>
-                <ArrowRight size={15} className="shrink-0 mt-0.5 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors" />
+              <Link href={`/packs/${pack.id}`} className="block">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <h2 className="text-[15px] font-semibold text-[var(--color-text-primary)] leading-snug group-hover:text-[var(--color-primary)] transition-colors">
+                    {pack.title}
+                  </h2>
+                  <ArrowRight size={15} className="shrink-0 mt-0.5 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors" />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {pack.company && <Badge variant="primary">{pack.company}</Badge>}
+                  {pack.role_level && <Badge variant="default">{pack.role_level}</Badge>}
+                  {pack.interview_type && <Badge variant="default">{pack.interview_type}</Badge>}
+                </div>
+                {pack.created_at && (
+                  <p className="mt-3 text-[11px] text-[var(--color-text-muted)]">
+                    Created {new Date(pack.created_at).toLocaleDateString()}
+                  </p>
+                )}
+              </Link>
+
+              {/* Delete control */}
+              <div className="mt-3 flex items-center gap-2">
+                {confirmDeleteId === pack.id ? (
+                  <>
+                    <span className="text-[12px] text-[var(--color-text-muted)]">Delete this pack?</span>
+                    <button
+                      onClick={() => handleDelete(pack.id)}
+                      disabled={deleting}
+                      className="text-[12px] font-semibold text-[var(--color-signal-critical)] hover:underline disabled:opacity-50"
+                    >
+                      {deleting ? 'Deleting…' : 'Yes, delete'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-[12px] text-[var(--color-text-muted)] hover:underline"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(pack.id)}
+                    className="flex items-center gap-1 text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-signal-critical)] transition-colors"
+                  >
+                    <Trash2 size={12} />
+                    Delete
+                  </button>
+                )}
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {pack.company && <Badge variant="primary">{pack.company}</Badge>}
-                {pack.role_level && <Badge variant="default">{pack.role_level}</Badge>}
-                {pack.interview_type && <Badge variant="default">{pack.interview_type}</Badge>}
-              </div>
-              {pack.created_at && (
-                <p className="mt-3 text-[11px] text-[var(--color-text-muted)]">
-                  Created {new Date(pack.created_at).toLocaleDateString()}
-                </p>
-              )}
-            </Link>
+            </div>
           ))}
         </div>
       )}

@@ -65,6 +65,35 @@ export async function PATCH(
   return NextResponse.json({ pack })
 }
 
+// DELETE /api/packs/[packId]
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ packId: string }> }
+) {
+  const { packId } = await params
+  const flags = getDemoFlags()
+
+  // local- and demo- packs live only in the client — nothing to delete server-side
+  if (packId.startsWith('local-') || packId.startsWith('demo-')) {
+    return NextResponse.json({ ok: true })
+  }
+
+  if (flags.auth) return NextResponse.json({ ok: true })
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const { error } = await supabase
+    .from('job_packs')
+    .delete()
+    .eq('id', packId)
+    .eq('user_id', user.id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+
 function getDemoPack(packId: string) {
   return {
     id: packId,

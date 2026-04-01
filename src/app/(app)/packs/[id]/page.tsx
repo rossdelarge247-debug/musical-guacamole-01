@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'next/navigation'
-import { Copy, Check, ChevronRight, Zap } from 'lucide-react'
+import { useParams, useRouter } from 'next/navigation'
+import { Copy, Check, ChevronRight, Zap, Trash2 } from 'lucide-react'
 import { Breadcrumbs } from '@/components/layout/breadcrumbs'
 import { Badge } from '@/components/ui/badge'
 import { PageLoading } from '@/components/ui/loading-spinner'
@@ -497,9 +497,12 @@ function PressureTab({ pack }: { pack: Pack }) {
 
 export default function PackDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const router = useRouter()
   const [pack, setPack] = useState<Pack | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabId>('overview')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchPack = useCallback(async () => {
     try {
@@ -531,6 +534,25 @@ export default function PackDetailPage() {
     fetchPack()
   }, [fetchPack])
 
+  async function handleDelete() {
+    if (!id) return
+    setDeleting(true)
+    try {
+      await fetch(`/api/packs/${id}`, { method: 'DELETE' })
+      // Remove from localStorage regardless of pack type
+      try {
+        const stored = localStorage.getItem('im:packs')
+        if (stored) {
+          const filtered = JSON.parse(stored).filter((p: { id: string }) => p.id !== id)
+          localStorage.setItem('im:packs', JSON.stringify(filtered))
+        }
+      } catch { /* ignore */ }
+      router.push('/packs')
+    } catch { /* ignore */ } finally {
+      setDeleting(false)
+    }
+  }
+
   if (loading) return <PageLoading label="Loading pack…" />
   if (!pack) return (
     <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
@@ -538,12 +560,32 @@ export default function PackDetailPage() {
       <p className="text-[14px] text-[var(--color-text-muted)]">
         This pack may have been created before the latest update. Try creating a new one.
       </p>
-      <a
-        href="/packs"
-        className="text-[14px] font-semibold text-[var(--color-primary)] hover:underline"
-      >
+      <a href="/packs" className="text-[14px] font-semibold text-[var(--color-primary)] hover:underline">
         ← Back to Interview Packs
       </a>
+      {confirmDelete ? (
+        <div className="flex items-center gap-3 mt-2">
+          <span className="text-[13px] text-[var(--color-text-muted)]">Remove this entry?</span>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-[13px] font-semibold text-[var(--color-signal-critical)] hover:underline disabled:opacity-50"
+          >
+            {deleting ? 'Removing…' : 'Yes, remove'}
+          </button>
+          <button onClick={() => setConfirmDelete(false)} className="text-[13px] text-[var(--color-text-muted)] hover:underline">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setConfirmDelete(true)}
+          className="flex items-center gap-1.5 text-[13px] text-[var(--color-text-muted)] hover:text-[var(--color-signal-critical)] transition-colors mt-2"
+        >
+          <Trash2 size={13} />
+          Remove from list
+        </button>
+      )}
     </div>
   )
 
@@ -574,9 +616,37 @@ export default function PackDetailPage() {
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 space-y-4">
             {/* Title + company */}
             <div>
-              <h1 className="text-[18px] font-semibold text-[var(--color-text-primary)] leading-snug">
-                {pack.title}
-              </h1>
+              <div className="flex items-start justify-between gap-2">
+                <h1 className="text-[18px] font-semibold text-[var(--color-text-primary)] leading-snug">
+                  {pack.title}
+                </h1>
+                {confirmDelete ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] text-[var(--color-text-muted)]">Delete?</span>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="text-[11px] font-semibold text-[var(--color-signal-critical)] hover:underline disabled:opacity-50"
+                    >
+                      {deleting ? '…' : 'Yes'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      className="text-[11px] text-[var(--color-text-muted)] hover:underline"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-signal-critical)] transition-colors mt-0.5"
+                    aria-label="Delete pack"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {pack.company && (
                   <Badge variant="primary">{pack.company}</Badge>
