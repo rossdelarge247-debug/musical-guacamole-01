@@ -235,6 +235,35 @@ const DEMO_PACK = {
 type Pack = typeof DEMO_PACK
 type TabId = 'overview' | 'questions' | 'experience' | 'stories' | 'pressure'
 
+const EMPTY_READINESS = {
+  intro: 0, leadership: 0, failure: 0, conflict: 0,
+  ambiguity: 0, evidence: 0, exec_presence: 0, motivation: 0,
+}
+
+// Bridge DB column names / missing fields to the shape the page expects
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalisePack(raw: any): Pack {
+  return {
+    ...raw,
+    // DB uses readiness_scores; DEMO_PACK uses readiness
+    readiness: raw.readiness ?? raw.readiness_scores ?? EMPTY_READINESS,
+    stories: raw.stories ?? [],
+    pressure_points: raw.pressure_points ?? [],
+    likely_questions: raw.likely_questions ?? [],
+    target_signals: raw.target_signals ?? [],
+    inferred_priorities: raw.inferred_priorities ?? [],
+    vocabulary: raw.vocabulary ?? [],
+    overlap_areas: raw.overlap_areas ?? [],
+    gap_areas: raw.gap_areas ?? [],
+    gap_filling_tips: raw.gap_filling_tips ?? [],
+    experience_card_prompts: raw.experience_card_prompts ?? [],
+    match_score: raw.match_score ?? 0,
+    match_rationale: raw.match_rationale ?? '',
+    org_intel: raw.org_intel ?? null,
+    opening_pitch: raw.opening_pitch ?? '',
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatSignal(s: string) {
@@ -481,7 +510,7 @@ export default function PackDetailPage() {
           if (stored) {
             const packs = JSON.parse(stored)
             const found = packs.find((p: Pack) => p.id === id)
-            if (found) { setPack(found); setLoading(false); return }
+            if (found) { setPack(normalisePack(found)); setLoading(false); return }
           }
         } catch { /* ignore */ }
         setLoading(false)
@@ -491,7 +520,7 @@ export default function PackDetailPage() {
       const res = await fetch(`/api/packs/${id}`)
       if (res.ok) {
         const data = await res.json()
-        setPack(data.pack ?? data)
+        setPack(normalisePack(data.pack ?? data))
       }
     } catch { /* ignore */ } finally {
       setLoading(false)
