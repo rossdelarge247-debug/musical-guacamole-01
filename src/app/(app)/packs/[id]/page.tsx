@@ -2,11 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { Copy, Check, ChevronRight, ExternalLink, Zap } from 'lucide-react'
+import { Copy, Check, ChevronRight, Zap } from 'lucide-react'
 import { Breadcrumbs } from '@/components/layout/breadcrumbs'
 import { Badge } from '@/components/ui/badge'
 import { PageLoading } from '@/components/ui/loading-spinner'
 import { cn } from '@/lib/utils'
+import { MatchScoreCard } from './_components/match-score-card'
+import { OrgIntelCard } from './_components/org-intel-card'
+import { OverviewTab } from './_components/overview-tab'
+import { ExperienceTab } from './_components/experience-tab'
 
 // ─── Demo data ────────────────────────────────────────────────────────────────
 
@@ -138,10 +142,98 @@ const DEMO_PACK = {
     exec_presence: 0,
     motivation: 0,
   },
+  match_score: 74,
+  match_rationale:
+    'Strong product leadership with measurable outcomes, but limited enterprise sales exposure and small team size create moderate gaps.',
+  overlap_areas: [
+    'B2B SaaS product leadership with measurable outcomes',
+    'Data-led decision making',
+    'Cross-functional stakeholder alignment',
+    'Onboarding and activation optimisation',
+  ],
+  gap_areas: [
+    'No enterprise sales cycle experience',
+    'Team management capped at 4 direct reports',
+    'No P&L ownership demonstrated',
+  ],
+  gap_filling_tips: [
+    'Frame work with Sales as commercial partnership — reference deal sizes and buyer personas influenced',
+    'Emphasise dotted-line influence: cross-BU alignment involved coordinating 15+ people',
+    'Reframe as commercial accountability — connect retention/activation metrics to revenue impact',
+  ],
+  org_intel: {
+    key_intel: [
+      'FinovaTech is scaling fast — expect to own decisions with limited process support',
+      'The role has a high cross-functional footprint; internal relationships will matter as much as output',
+      'They emphasise "commercial awareness" — be ready to speak to revenue and cost impact',
+      'The team is rebuilding after a period of churn — bringing structure will be welcomed',
+    ],
+    culture_signals: [
+      'Move-fast, high ownership culture',
+      'Data-informed but intuition is respected at senior level',
+      'Direct communication style — they will reward candour',
+    ],
+    sentiment: 'positive' as const,
+    sentiment_reason:
+      'The JD reads with energy and clarity — this is a well-scoped role at a team that knows what they want.',
+    what_they_care_about: [
+      'Shipping things that actually move metrics',
+      'People who take ownership without being told',
+      'Commercial instinct alongside product craft',
+    ],
+    red_flags: ['"Wear many hats" — scope may be broader than the title suggests'],
+  },
+  experience_card_prompts: [
+    {
+      node_id: 'node-1',
+      node_title: 'Head of Product, StartupCo',
+      node_type: 'role',
+      relevance_score: 0.88,
+      focus_points: [
+        'Led onboarding redesign with 40% time-to-value improvement',
+        'Owned roadmap across three business units under resource constraints',
+        'Built data instrumentation from scratch to drive decisions',
+      ],
+      story_prompt:
+        'Frame your tenure as a commercial transformation story — lead with the revenue and retention metrics you moved, then explain the product choices that drove them.',
+      zoom_in_areas: ['Team size and management depth', 'Stakeholder map complexity', 'How you handled conflicting priorities'],
+      defend_areas: ['Only 4 direct reports for a role requiring 8+', 'No explicit P&L ownership mentioned'],
+    },
+    {
+      node_id: 'node-2',
+      node_title: 'Onboarding Redesign Project',
+      node_type: 'project',
+      relevance_score: 0.82,
+      focus_points: [
+        '40% faster time-to-value is a headline metric — lead with it',
+        'Cross-functional scope shows you can drive change through others',
+        '18% retention uplift directly maps to revenue impact',
+      ],
+      story_prompt:
+        'Tell the story in three acts: the problem (high churn at activation), the process (discovery, prioritisation, tradeoffs), and the outcome (measurable commercial result).',
+      zoom_in_areas: ['How you measured success', 'Who you had to influence to make it happen', 'What you cut from scope'],
+      defend_areas: [],
+    },
+    {
+      node_id: 'node-3',
+      node_title: 'Cross-BU Roadmap Alignment',
+      node_type: 'project',
+      relevance_score: 0.71,
+      focus_points: [
+        'Shows large-scale stakeholder management across political boundaries',
+        'Six-week timeline demonstrates structured facilitation skills',
+        'Single unified roadmap outcome shows you can drive hard decisions',
+      ],
+      story_prompt:
+        'Position this as your enterprise-scale leadership proof point — emphasise the number of stakeholders, the differing agendas, and the process you designed to resolve them.',
+      zoom_in_areas: ['What your role was vs. others', 'How you handled the stakeholder who did not want to align', 'Lasting impact after you reached agreement'],
+      defend_areas: ['Be ready to explain how this differs from an enterprise sales cycle if pressed'],
+    },
+  ],
 }
 
 type Pack = typeof DEMO_PACK
-type TabId = 'questions' | 'stories' | 'pressure'
+type TabId = 'overview' | 'questions' | 'experience' | 'stories' | 'pressure'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -378,7 +470,7 @@ export default function PackDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [pack, setPack] = useState<Pack | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<TabId>('questions')
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
 
   const fetchPack = useCallback(async () => {
     try {
@@ -413,10 +505,12 @@ export default function PackDetailPage() {
   if (loading) return <PageLoading label="Loading pack…" />
   if (!pack) return null
 
-  const tabs: { id: TabId; label: string; count: number }[] = [
+  const tabs: { id: TabId; label: string; count?: number }[] = [
+    { id: 'overview', label: 'Overview' },
     { id: 'questions', label: 'Questions', count: pack.likely_questions.length },
+    { id: 'experience', label: 'Experience', count: (pack.experience_card_prompts ?? []).length },
     { id: 'stories', label: 'Stories', count: pack.stories.length },
-    { id: 'pressure', label: 'Pressure Points', count: pack.pressure_points.length },
+    { id: 'pressure', label: 'Pressure', count: pack.pressure_points.length },
   ]
 
   return (
@@ -463,6 +557,15 @@ export default function PackDetailPage() {
               </p>
             </div>
           </div>
+
+          {/* Match Score card */}
+          <MatchScoreCard
+            score={pack.match_score ?? 0}
+            rationale={pack.match_rationale ?? ''}
+          />
+
+          {/* Org Intel card */}
+          {pack.org_intel && <OrgIntelCard intel={pack.org_intel} />}
 
           {/* Signals + vocabulary card */}
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 space-y-4">
@@ -554,23 +657,36 @@ export default function PackDetailPage() {
                 )}
               >
                 {tab.label}
-                <span
-                  className={cn(
-                    'inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold',
-                    activeTab === tab.id
-                      ? 'bg-white/25 text-white'
-                      : 'bg-[var(--color-border)] text-[var(--color-text-muted)]',
-                  )}
-                >
-                  {tab.count}
-                </span>
+                {tab.count !== undefined && (
+                  <span
+                    className={cn(
+                      'inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold',
+                      activeTab === tab.id
+                        ? 'bg-white/25 text-white'
+                        : 'bg-[var(--color-border)] text-[var(--color-text-muted)]',
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
           {/* Tab content */}
           <div>
+            {activeTab === 'overview' && (
+              <OverviewTab
+                overlapAreas={pack.overlap_areas ?? []}
+                gapAreas={pack.gap_areas ?? []}
+                gapFillingTips={pack.gap_filling_tips ?? []}
+                orgIntel={pack.org_intel ?? null}
+              />
+            )}
             {activeTab === 'questions' && <QuestionsTab pack={pack} />}
+            {activeTab === 'experience' && (
+              <ExperienceTab prompts={pack.experience_card_prompts ?? []} />
+            )}
             {activeTab === 'stories' && <StoriesTab pack={pack} />}
             {activeTab === 'pressure' && <PressureTab pack={pack} />}
           </div>
