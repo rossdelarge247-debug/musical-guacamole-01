@@ -7,6 +7,14 @@ import { detectPressurePoints } from '@/lib/ai/engines/pressure'
 import { researchOrg } from '@/lib/ai/engines/org'
 import type { Story, PressurePoint, CandidateProfile, CandidateGraphNode } from '@/types'
 
+const VALID_LEVELS = ['graduate', 'early', 'mid', 'senior', 'director', 'executive'] as const
+type CandidateLevel = typeof VALID_LEVELS[number]
+
+function sanitiseLevel(raw: string | undefined | null): CandidateLevel {
+  if (raw && VALID_LEVELS.includes(raw as CandidateLevel)) return raw as CandidateLevel
+  return 'mid'
+}
+
 // POST /api/packs — create a new Interview Pack from a JD
 export async function POST(request: Request) {
   try {
@@ -84,7 +92,7 @@ export async function POST(request: Request) {
           title: title || `${company || 'Role'} — Interview Pack`,
           company: company || null,
           jd_raw,
-          role_level: role_level || 'mid',
+          role_level: sanitiseLevel(role_level),
           interview_type: interview_type || 'mixed',
           ...jdAnalysis,
           org_intel: orgIntel,
@@ -129,7 +137,7 @@ export async function POST(request: Request) {
         title: title || `${company || 'Role'} — Interview Pack`,
         company: company || null,
         jd_raw,
-        role_level: role_level || 'mid',
+        role_level: sanitiseLevel(role_level),
         interview_type: interview_type || 'mixed',
         inferred_priorities: jdAnalysis.inferred_priorities,
         likely_questions: jdAnalysis.likely_questions,
